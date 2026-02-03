@@ -1,0 +1,115 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    width: 100%;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+
+#map {
+    height: 100vh;
+    width: 100vw;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* Google Maps custom control button styling */
+.custom-map-control-button {
+    background-color: #fff;
+    border: 0;
+    border-radius: 2px;
+    box-shadow: 0 1px 4px -1px rgba(0, 0, 0, 0.3);
+    margin: 10px;
+    padding: 0 0.5em;
+    font: 400 18px Roboto, Arial, sans-serif;
+    overflow: hidden;
+    height: 40px;
+    cursor: pointer;
+}
+
+.custom-map-control-button:hover {
+    background-color: #f8f8f8;
+}
+
+.custom-map-control-button:active {
+    background-color: #e8e8e8;
+}
+
+/* Blue dot for user location */
+.blue-dot {
+    width: 20px;
+    height: 20px;
+    background-color: #4285F4;
+    border: 3px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 0 rgba(66, 133, 244, 0.4);
+    animation: pulse 2s infinite;
+    position: relative;
+}
+
+.direction-wedge {
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 35px solid transparent;
+    border-right: 35px solid transparent;
+    border-top: 70px solid rgba(66, 133, 244, 0.3);
+    bottom: 50%;
+    left: 50%;
+    transform-origin: 50% 100%;
+    margin-left: -35px;
+    margin-bottom: -2px;
+    pointer-events: none;
+}
+
+/* Bus stop icon styling */
+.bus-stop-icon {
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.bus-stop-icon:hover {
+    transform: scale(1.1);
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(66, 133, 244, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(66, 133, 244, 0);
+    }
+}
+
+/* Responsive adjustments for mobile devices */
+@media screen and (max-width: 768px) {
+    #map {
+        height: 100vh;
+        width: 100vw;
+    }
+}
+
+/* Responsive adjustments for tablets */
+@media screen and (min-width: 769px) and (max-width: 1024px) {
+    #map {
+        height: 100vh;
+        width: 100vw;
+    }
+}
+
+/* Responsive adjustments for desktop */
+@media screen and (min-width: 1025px) {
+    #map {
+        height: 100vh;
+        width: 100vw;
+    }
+}
