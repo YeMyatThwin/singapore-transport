@@ -6,19 +6,16 @@ let watchId;
 let deviceHeading = null; // Store device compass heading
 
 function initMap() {
-    // Bus stop location: 258 Bedok Rd, Singapore
-    const busStopLocation = { lat: 1.330009, lng: 103.948087 };
     // The map
     map = new google.maps.Map(document.getElementById("map"), {
         zoom: 15,
-        center: busStopLocation,
         fullscreenControl: false,
         mapId: "fbef370cf798c9795d634795",
         zoomControl: true,
         mapTypeControl: false,
         streetViewControl: false,
         colorScheme: google.maps.ColorScheme.DARK, // Set the map to dark mode
-        
+
     });
 
     // Wait for map to be ready, then add location button
@@ -33,7 +30,7 @@ function initMap() {
         // Add click event listener to start tracking
         locationButton.addEventListener("click", () => {
             console.log("Location button clicked");
-            
+
             if (!navigator.geolocation) {
                 alert("Error: Your browser doesn't support geolocation.");
                 return;
@@ -44,25 +41,19 @@ function initMap() {
                 map.setCenter(userLocationMarker.position);
                 map.setZoom(15);
             }
-            
+
             // Request orientation permission on button click (works on iOS)
             requestOrientationPermission();
         });
 
-        // Create bus stop marker near Expo station
-        createBusStopMarker();
+        // Load bus stops from local JSON file
+        loadBusStopsFromJSON();
 
         // Check if iOS and show compass prompt
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-            // iOS: Show prompt immediately, then request permissions when user clicks
+            // iOS: Start location tracking, compass will be requested via button click only
             if (navigator.geolocation) {
                 startLocationTracking();
-                // Show compass prompt after a brief delay
-                setTimeout(() => {
-                    if (confirm('Enable compass to see direction arrow?')) {
-                        requestOrientationPermission();
-                    }
-                }, 1000);
             }
         } else {
             // Non-iOS: start both automatically
@@ -119,7 +110,7 @@ function startOrientationTracking() {
                     webkitCompassHeading: event.webkitCompassHeading
                 });
             }
-            
+
             // alpha: compass direction (0-360)
             // 0 = North, 90 = East, 180 = South, 270 = West
             if (event.alpha !== null) {
@@ -155,32 +146,6 @@ function updateDirectionWedge() {
             wedge.style.transform = `rotate(${deviceHeading}deg)`;
         }
     }
-}
-
-function createBusStopMarker() {
-    // Bus stop location: 258 Bedok Rd, Singapore
-    const busStopLocation = { lat: 1.330009, lng: 103.948087 };
-
-    // Create bus stop icon
-    const busStopIcon = document.createElement('div');
-    busStopIcon.innerHTML = `
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="4" width="16" height="16" rx="2" fill="#1976D2"/>
-            <rect x="6" y="6" width="12" height="8" fill="white"/>
-            <circle cx="9" cy="17" r="1.5" fill="white"/>
-            <circle cx="15" cy="17" r="1.5" fill="white"/>
-            <line x1="12" y1="6" x2="12" y2="14" stroke="#1976D2" stroke-width="1"/>
-        </svg>
-    `;
-    busStopIcon.className = 'bus-stop-icon';
-
-    // Create the bus stop marker
-    new google.maps.marker.AdvancedMarkerElement({
-        position: busStopLocation,
-        map: map,
-        content: busStopIcon,
-        title: "Bus Stop - Expo Station"
-    });
 }
 
 function startLocationTracking() {
@@ -294,4 +259,129 @@ function updateUserLocationMarker(position) {
         strokeOpacity: 0.3,
         strokeWeight: 1,
     });
+}
+
+// Store bus stop markers
+const busStopMarkers = [];
+
+// Load bus stops from local JSON file
+async function loadBusStopsFromJSON() {
+    try {
+        console.log('Loading bus stops from local JSON...');
+
+        const response = await fetch('saved-data/bus_stops_singapore.json');
+        const data = await response.json();
+
+        if (!data || !data.value) {
+            console.error('Invalid JSON format');
+            return;
+        }
+
+        const busStops = data.value;
+        console.log(`Total bus stops loaded: ${busStops.length}`);
+
+        // Display bus stops around map center
+        displayNearbyBusStops(busStops);
+
+        // Update bus stops when map moves
+        map.addListener('idle', () => {
+            displayNearbyBusStops(busStops);
+        });
+    } catch (error) {
+        console.error('Error loading bus stops:', error);
+    }
+}
+
+// Display bus stops within radius of map center (zoom-dependent)
+function displayNearbyBusStops(allBusStops) {
+    const mapCenter = map.getCenter();
+
+    // Wait for map to be ready
+    if (!mapCenter) {
+        console.log('Map not ready yet, waiting...');
+        return;
+    }
+
+    const zoomLevel = map.getZoom();
+
+    // Clear existing markers
+    busStopMarkers.forEach(marker => marker.setMap(null));
+    busStopMarkers.length = 0;
+
+    // Don't show bus stops if zoomed out too far
+    if (zoomLevel < 14) {
+        console.log(`Zoom level ${zoomLevel} - bus stops hidden (need zoom >= 14)`);
+        return;
+    }
+
+    // Adjust radius and icon size based on zoom level
+    let radiusKm, iconSize;
+    if (zoomLevel >= 16) {
+        radiusKm = 1; // Close up - less stops
+        iconSize = 40; // Bigger icons
+    } else {
+        radiusKm = 2; // Wider view - more stops
+        iconSize = 20; // Smaller icons
+    }
+
+    // Filter nearby stops based on map center
+    const nearbyStops = allBusStops.filter(stop => {
+        const distance = calculateDistance(
+            mapCenter.lat(),
+            mapCenter.lng(),
+            stop.Latitude,
+            stop.Longitude
+        );
+        return distance <= radiusKm * 1000; // Convert km to meters
+    });
+
+    console.log(`Zoom ${zoomLevel}: Found ${nearbyStops.length} bus stops within ${radiusKm}km`);
+
+    // Create markers for nearby stops
+    nearbyStops.forEach(stop => {
+        createBusStopMarker(stop, iconSize);
+    });
+}
+
+// Calculate distance between two coordinates (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+}
+
+// Create bus stop marker on map
+function createBusStopMarker(stop, size = 28) {
+    const svgIcon = `
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Transformed by: SVG Repo Mixer Tools -->
+<svg fill="#ffffff" height="${size}px" width="${size}px" version="1.1" id="Capa_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="-39.5 -39.5 474.00 474.00" xml:space="preserve" stroke="#ffffff" transform="matrix(-1, 0, 0, 1, 0, 0)rotate(0)">
+<g id="SVGRepo_bgCarrier" stroke-width="0">
+<rect x="-39.5" y="-39.5" width="474.00" height="474.00" rx="66.36" fill="#000000" strokewidth="0"/>
+</g>
+<g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round" stroke="#CCCCCC" stroke-width="3.16"/>
+<g id="SVGRepo_iconCarrier"> <g> <path d="M322.082,139.838h-12.395c-3.145,0-5.693,2.55-5.693,5.694v13.845c-1.627-12.684-3.402-26.597-4.619-36.319 C296.782,104.152,287.384,75,197.501,75c-89.886,0-99.471,29.156-102.066,48.059c-1.478,11.8-2.953,23.6-4.43,35.4v-12.926 c0-3.145-2.549-5.694-5.693-5.694H72.918c-3.143,0-5.693,2.55-5.693,5.694v31.319c0,3.145,2.551,5.694,5.693,5.694h12.395 c1.006,0,1.949-0.263,2.77-0.721c-0.37,2.958-0.74,5.915-1.11,8.873v77.735c-1.989,1.507-3.28,3.887-3.28,6.571v11.882 c0,4.55,3.696,8.247,8.247,8.247h17.183v14.34c0,5.805,4.723,10.527,10.527,10.527h17.676c5.805,0,10.527-4.723,10.527-10.527 v-14.34h99.293v14.34c0,5.805,4.723,10.527,10.527,10.527h17.676c5.807,0,10.531-4.723,10.531-10.527v-14.34h17.184 c4.55,0,8.246-3.697,8.246-8.247v-11.882c0-2.685-1.293-5.066-3.282-6.572v-77.733c0,0-0.445-3.444-1.148-8.898 c0.829,0.472,1.787,0.746,2.81,0.746h12.395c3.143,0,5.693-2.55,5.693-5.694v-31.319 C327.775,142.388,325.225,139.838,322.082,139.838z M161.602,95.499h71.789c2.967,0,5.36,2.403,5.36,5.364 c0,2.957-2.394,5.359-5.36,5.359h-71.789c-2.96,0-5.354-2.402-5.354-5.359C156.248,97.902,158.642,95.499,161.602,95.499z M142.798,254.449c-9.156,0-16.571-7.423-16.571-16.572c0-9.158,7.415-16.575,16.571-16.575c9.154,0,16.57,7.417,16.57,16.575 C159.368,247.026,151.952,254.449,142.798,254.449z M252.203,254.449c-9.158,0-16.573-7.423-16.573-16.572 c0-9.158,7.415-16.575,16.573-16.575c9.148,0,16.571,7.417,16.571,16.575C268.774,247.026,261.352,254.449,252.203,254.449z M268.423,182.545c-36.563,0-105.282-0.002-141.844,0.001c-4.691,0-8.27-3.686-7.984-8.243c0.884-14.199,1.773-28.396,2.664-42.596 c0.281-4.556,4.098-8.25,8.511-8.25c34.431,0,101.026,0,135.459,0c4.413,0,8.229,3.694,8.514,8.25 c0.886,14.199,1.772,28.396,2.655,42.596C276.688,178.859,273.11,182.545,268.423,182.545z"/> <path d="M313.002,0H82C36.785,0,0,36.784,0,81.998v230.993C0,358.211,36.785,395,82,395h231.002 C358.216,395,395,358.211,395,312.991V81.998C395,36.784,358.216,0,313.002,0z M380,312.991C380,349.94,349.944,380,313.002,380H82 c-36.944,0-67-30.06-67-67.009V81.998C15,45.055,45.056,15,82,15h231.002C349.944,15,380,45.055,380,81.998V312.991z"/> </g> </g>
+</svg>`;
+
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svgIcon, 'image/svg+xml');
+    const svgElement = svgDoc.documentElement;
+
+    const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: { lat: stop.Latitude, lng: stop.Longitude },
+        map: map,
+        content: svgElement,
+        title: `${stop.Description || 'Bus Stop'}\n${stop.RoadName || ''}\nStop: ${stop.BusStopCode || ''}`
+    });
+
+    busStopMarkers.push(marker);
 }
