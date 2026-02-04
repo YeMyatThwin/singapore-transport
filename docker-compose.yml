@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  singapore-transport:
+    build: .
+    container_name: singapore-transport-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - LTA_DATAMALL_API_KEY=${LTA_DATAMALL_API_KEY}
+    restart: unless-stopped
+    volumes:
+      # Mount the saved-data directory for bus stops JSON
+      - ./saved-data:/app/saved-data:ro
