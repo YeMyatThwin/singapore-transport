@@ -90,11 +90,175 @@ html, body {
     }
 }
 
+/* Bottom Sheet Styling */
+.bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.2);
+    transform: translateY(100%);
+    transition: transform 0.3s ease-out;
+    z-index: 1000;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.bottom-sheet.active {
+    transform: translateY(0);
+}
+
+.bottom-sheet-handle {
+    width: 40px;
+    height: 4px;
+    background: #ddd;
+    border-radius: 2px;
+    margin: 12px auto;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+.bottom-sheet-content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.bottom-sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 0 20px 16px;
+    border-bottom: 1px solid #eee;
+}
+
+.bottom-sheet-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    font-size: 32px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    margin-left: 12px;
+    flex-shrink: 0;
+}
+
+.close-btn:hover {
+    color: #333;
+}
+
+.bottom-sheet-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.info-section {
+    margin-bottom: 24px;
+}
+
+.info-section:last-child {
+    margin-bottom: 0;
+}
+
+.info-section h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.bus-services {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.bus-number {
+    background: #4285F4;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    min-width: 50px;
+    text-align: center;
+}
+
+.incoming-buses {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.bus-arrival {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    gap: 16px;
+}
+
+.bus-arrival-number {
+    background: #4285F4;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    min-width: 50px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.bus-arrival-info {
+    flex: 1;
+}
+
+.arrival-time {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.bus-load {
+    font-size: 13px;
+    color: #666;
+}
+
 /* Responsive adjustments for mobile devices */
 @media screen and (max-width: 768px) {
     #map {
         height: 100vh;
         width: 100vw;
+    }
+    
+    .bottom-sheet {
+        max-height: 80vh;
     }
 }
 

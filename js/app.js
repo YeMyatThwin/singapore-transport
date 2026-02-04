@@ -4,6 +4,7 @@ let userLocationMarker;
 let accuracyCircle;
 let watchId;
 let deviceHeading = null; // Store device compass heading
+let bottomSheet; // Bottom sheet element
 
 function initMap() {
     // The map
@@ -63,6 +64,13 @@ function initMap() {
             }
         }
     });
+
+    // Default center (Singapore)
+    const singapore = { lat: 1.3521, lng: 103.8198 };
+    map.setCenter(singapore);
+
+    // Initialize bottom sheet
+    initBottomSheet();
 }
 
 async function requestOrientationPermission() {
@@ -383,5 +391,116 @@ function createBusStopMarker(stop, size = 28) {
         title: `${stop.Description || 'Bus Stop'}\n${stop.RoadName || ''}\nStop: ${stop.BusStopCode || ''}`
     });
 
+    // Add click listener to show bottom sheet
+    marker.addListener('click', () => {
+        showBottomSheet(stop);
+    });
+
     busStopMarkers.push(marker);
+}
+
+// Initialize bottom sheet functionality
+function initBottomSheet() {
+    bottomSheet = document.getElementById('bottomSheet');
+    const closeBtn = document.getElementById('closeBottomSheet');
+    const handle = document.querySelector('.bottom-sheet-handle');
+
+    // Close button
+    closeBtn.addEventListener('click', hideBottomSheet);
+
+    // Click outside to close
+    bottomSheet.addEventListener('click', (e) => {
+        if (e.target === bottomSheet) {
+            hideBottomSheet();
+        }
+    });
+
+    // Drag handle functionality (touch and mouse)
+    let startY = 0;
+    let currentY = 0;
+    let isDragging = false;
+
+    // Touch events
+    handle.addEventListener('touchstart', (e) => {
+        startY = e.touches[0].clientY;
+        isDragging = true;
+        bottomSheet.style.transition = 'none';
+    });
+
+    handle.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        
+        currentY = e.touches[0].clientY;
+        const diff = currentY - startY;
+        
+        // Only allow dragging downward
+        if (diff > 0) {
+            bottomSheet.style.transform = `translateY(${diff}px)`;
+        }
+    });
+
+    handle.addEventListener('touchend', handleDragEnd);
+
+    // Mouse events for desktop
+    handle.addEventListener('mousedown', (e) => {
+        startY = e.clientY;
+        isDragging = true;
+        bottomSheet.style.transition = 'none';
+        handle.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        currentY = e.clientY;
+        const diff = currentY - startY;
+        
+        // Only allow dragging downward
+        if (diff > 0) {
+            bottomSheet.style.transform = `translateY(${diff}px)`;
+        }
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+        handleDragEnd();
+        handle.style.cursor = 'grab';
+    });
+
+    function handleDragEnd() {
+        const diff = currentY - startY;
+        const screenHeight = window.innerHeight;
+        const threshold = screenHeight * 0.3; // 30% of screen height
+        
+        bottomSheet.style.transition = 'transform 0.3s ease-out';
+        
+        // If dragged down more than 30% of screen, close it
+        if (diff > threshold) {
+            hideBottomSheet();
+        } else {
+            // Snap back to open position
+            bottomSheet.style.transform = 'translateY(0)';
+        }
+        
+        isDragging = false;
+        startY = 0;
+        currentY = 0;
+    }
+}
+
+// Show bottom sheet with bus stop data
+function showBottomSheet(stop) {
+    const title = document.getElementById('busStopTitle');
+    
+    // Set title with bus stop code, description, and road name on new line
+    title.innerHTML = `${stop.BusStopCode} - ${stop.Description}<br><span style="font-size: 14px; font-weight: 400; color: #666;">${stop.RoadName}</span>`;
+    
+    // Add active class to show the sheet
+    bottomSheet.classList.add('active');
+}
+
+// Hide bottom sheet
+function hideBottomSheet() {
+    bottomSheet.classList.remove('active');
+    bottomSheet.style.transform = '';
 }

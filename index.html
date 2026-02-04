@@ -8,6 +8,56 @@
 </head>
 <body>
     <div id="map"></div>
+    
+    <!-- Bottom Sheet -->
+    <div id="bottomSheet" class="bottom-sheet">
+        <div class="bottom-sheet-handle"></div>
+        <div class="bottom-sheet-content">
+            <div class="bottom-sheet-header">
+                <h2 id="busStopTitle"></h2>
+                <button id="closeBottomSheet" class="close-btn">&times;</button>
+            </div>
+            <div class="bottom-sheet-body">
+                <div class="info-section">
+                    <h3>Available Bus Services</h3>
+                    <div id="busServices" class="bus-services">
+                        <div class="bus-number">5</div>
+                        <div class="bus-number">12</div>
+                        <div class="bus-number">32</div>
+                        <div class="bus-number">100</div>
+                        <div class="bus-number">107</div>
+                    </div>
+                </div>
+                <div class="info-section">
+                    <h3>Incoming Buses</h3>
+                    <div id="incomingBuses" class="incoming-buses">
+                        <div class="bus-arrival">
+                            <div class="bus-arrival-number">5</div>
+                            <div class="bus-arrival-info">
+                                <div class="arrival-time">Arriving</div>
+                                <div class="bus-load">Seats Available</div>
+                            </div>
+                        </div>
+                        <div class="bus-arrival">
+                            <div class="bus-arrival-number">12</div>
+                            <div class="bus-arrival-info">
+                                <div class="arrival-time">3 min</div>
+                                <div class="bus-load">Standing Available</div>
+                            </div>
+                        </div>
+                        <div class="bus-arrival">
+                            <div class="bus-arrival-number">107</div>
+                            <div class="bus-arrival-info">
+                                <div class="arrival-time">8 min</div>
+                                <div class="bus-load">Limited Standing</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <script src="js/app.js"></script>
     <script async src="https://maps.googleapis.com/maps/api/js?key=API_KEY_PLACEHOLDER&callback=initMap&libraries=marker"></script>
 </body>
