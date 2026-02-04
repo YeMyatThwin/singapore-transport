@@ -489,7 +489,7 @@ function initBottomSheet() {
 }
 
 // Show bottom sheet with bus stop data
-function showBottomSheet(stop) {
+async function showBottomSheet(stop) {
     const title = document.getElementById('busStopTitle');
     
     // Set title with bus stop code, description, and road name on new line
@@ -497,6 +497,149 @@ function showBottomSheet(stop) {
     
     // Add active class to show the sheet
     bottomSheet.classList.add('active');
+    
+    // Fetch real bus arrival data
+    await fetchBusArrivalData(stop.BusStopCode);
+}
+
+// Fetch and display bus arrival data from LTA API
+async function fetchBusArrivalData(busStopCode) {
+    const busServicesContainer = document.getElementById('busServices');
+    const incomingBusesContainer = document.getElementById('incomingBuses');
+    
+    // Show loading state
+    busServicesContainer.innerHTML = '<div style="color: #999;">Loading...</div>';
+    incomingBusesContainer.innerHTML = '<div style="color: #999;">Loading...</div>';
+    
+    try {
+        const response = await fetch(`/api/bus-arrival?busStopCode=${busStopCode}`);
+        const data = await response.json();
+        
+        if (!data.Services || data.Services.length === 0) {
+            busServicesContainer.innerHTML = '<div style="color: #999;">No buses available at this stop</div>';
+            incomingBusesContainer.innerHTML = '<div style="color: #999;">No incoming buses</div>';
+            return;
+        }
+        
+        // Display available bus services
+        displayBusServices(data.Services, busServicesContainer);
+        
+        // Display incoming buses
+        displayIncomingBuses(data.Services, incomingBusesContainer);
+        
+    } catch (error) {
+        console.error('Error fetching bus arrival data:', error);
+        busServicesContainer.innerHTML = '<div style="color: #e53935;">Failed to load bus services</div>';
+        incomingBusesContainer.innerHTML = '<div style="color: #e53935;">Failed to load arrival times</div>';
+    }
+}
+
+// Display bus service numbers
+function displayBusServices(services, container) {
+    container.innerHTML = '';
+    services.forEach(service => {
+        const serviceElement = document.createElement('div');
+        serviceElement.className = 'bus-number';
+        serviceElement.textContent = service.ServiceNo;
+        container.appendChild(serviceElement);
+    });
+}
+
+// Display incoming buses with arrival times
+function displayIncomingBuses(services, container) {
+    container.innerHTML = '';
+    
+    // Collect all incoming buses from all services
+    const allBuses = [];
+    services.forEach(service => {
+        if (service.NextBus && service.NextBus.EstimatedArrival) {
+            allBuses.push({
+                serviceNo: service.ServiceNo,
+                operator: service.Operator,
+                ...service.NextBus
+            });
+        }
+        if (service.NextBus2 && service.NextBus2.EstimatedArrival) {
+            allBuses.push({
+                serviceNo: service.ServiceNo,
+                operator: service.Operator,
+                ...service.NextBus2
+            });
+        }
+        if (service.NextBus3 && service.NextBus3.EstimatedArrival) {
+            allBuses.push({
+                serviceNo: service.ServiceNo,
+                operator: service.Operator,
+                ...service.NextBus3
+            });
+        }
+    });
+    
+    // Sort by arrival time
+    allBuses.sort((a, b) => new Date(a.EstimatedArrival) - new Date(b.EstimatedArrival));
+    
+    // Display up to 10 nearest buses
+    const displayBuses = allBuses.slice(0, 10);
+    
+    if (displayBuses.length === 0) {
+        container.innerHTML = '<div style="color: #999;">No incoming buses</div>';
+        return;
+    }
+    
+    displayBuses.forEach(bus => {
+        const busElement = document.createElement('div');
+        busElement.className = 'bus-arrival';
+        
+        const arrivalTime = calculateArrivalTime(bus.EstimatedArrival);
+        const loadColor = getLoadColor(bus.Load);
+        const loadText = getLoadText(bus.Load);
+        
+        busElement.innerHTML = `
+            <div class="bus-arrival-number" style="background: ${loadColor};">${bus.serviceNo}</div>
+            <div class="bus-arrival-info">
+                <div class="arrival-time">${arrivalTime}</div>
+                <div class="bus-load">${loadText}${bus.Feature === 'WAB' ? ' • ♿' : ''}</div>
+            </div>
+        `;
+        
+        container.appendChild(busElement);
+    });
+}
+
+// Calculate arrival time in minutes
+function calculateArrivalTime(estimatedArrival) {
+    const now = new Date();
+    const arrival = new Date(estimatedArrival);
+    const diffMs = arrival - now;
+    const diffMins = Math.floor(diffMs / 60000); // Round down to nearest minute
+    
+    if (diffMins < 1) {
+        return 'Arriving';
+    } else if (diffMins === 1) {
+        return '1 min';
+    } else {
+        return `${diffMins} min`;
+    }
+}
+
+// Get color based on bus load
+function getLoadColor(load) {
+    switch (load) {
+        case 'SEA': return '#4CAF50'; // Green - Seats Available
+        case 'SDA': return '#FF9800'; // Amber - Standing Available
+        case 'LSD': return '#F44336'; // Red - Limited Standing
+        default: return '#4285F4';
+    }
+}
+
+// Get load text
+function getLoadText(load) {
+    switch (load) {
+        case 'SEA': return 'Seats Available';
+        case 'SDA': return 'Standing Available';
+        case 'LSD': return 'Limited Standing';
+        default: return 'Unknown';
+    }
 }
 
 // Hide bottom sheet
