@@ -5,6 +5,11 @@ let accuracyCircle;
 let watchId;
 let deviceHeading = null; // Store device compass heading
 let bottomSheet; // Bottom sheet element
+let currentBusStopCode = null; // Store current bus stop being viewed
+let refreshInterval = null; // Store auto-refresh interval
+let countdownInterval = null; // Store countdown animation interval
+let lastUpdateTime = null; // Store last successful update time
+let cachedBusData = null; // Store last known bus data
 
 function initMap() {
     // The map
@@ -505,21 +510,48 @@ async function showBottomSheet(stop) {
     // Set title with bus stop code, description, and road name on new line
     title.innerHTML = `${stop.BusStopCode} - ${stop.Description}<br><span style="font-size: 14px; font-weight: 400; color: #666;">${stop.RoadName}</span>`;
     
+    // Store current bus stop code for auto-refresh
+    currentBusStopCode = stop.BusStopCode;
+    
     // Add active class to show the sheet
     bottomSheet.classList.add('active');
     
     // Fetch real bus arrival data
     await fetchBusArrivalData(stop.BusStopCode);
+    
+    // Clear any existing intervals
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+    }
+    
+    // Start smooth countdown animation (updates every second)
+    countdownInterval = setInterval(() => {
+        updateBusCountdowns();
+    }, 1000); // Update every second
+    
+    // Start auto-refresh every 30 seconds
+    refreshInterval = setInterval(() => {
+        if (currentBusStopCode && bottomSheet.classList.contains('active')) {
+            fetchBusArrivalData(currentBusStopCode);
+        }
+    }, 30000); // 30000ms = 30 seconds
 }
 
 // Fetch and display bus arrival data from LTA API
 async function fetchBusArrivalData(busStopCode) {
     const busServicesContainer = document.getElementById('busServices');
     const incomingBusesContainer = document.getElementById('incomingBuses');
+    const lastUpdateElement = document.getElementById('lastUpdate');
+    const warningElement = document.getElementById('updateWarning');
     
-    // Show loading state
-    busServicesContainer.innerHTML = '<div style="color: #999;">Loading...</div>';
-    incomingBusesContainer.innerHTML = '<div style="color: #999;">Loading...</div>';
+    // Only show loading state on first load (when no cached data)
+    if (!cachedBusData) {
+        busServicesContainer.innerHTML = '<div style="color: #999;">Loading...</div>';
+        incomingBusesContainer.innerHTML = '<div style="color: #999;">Loading...</div>';
+    }
     
     try {
         const response = await fetch(`/api/bus-arrival?busStopCode=${busStopCode}`);
@@ -531,6 +563,20 @@ async function fetchBusArrivalData(busStopCode) {
             return;
         }
         
+        // Cache successful data
+        cachedBusData = data.Services;
+        lastUpdateTime = new Date();
+        
+        // Hide warning on successful update
+        if (warningElement) {
+            warningElement.style.display = 'none';
+        }
+        
+        // Update last update time
+        if (lastUpdateElement) {
+            lastUpdateElement.textContent = `Last updated: ${formatTime(lastUpdateTime)}`;
+        }
+        
         // Display available bus services
         displayBusServices(data.Services, busServicesContainer);
         
@@ -539,9 +585,57 @@ async function fetchBusArrivalData(busStopCode) {
         
     } catch (error) {
         console.error('Error fetching bus arrival data:', error);
-        busServicesContainer.innerHTML = '<div style="color: #e53935;">Failed to load bus services</div>';
-        incomingBusesContainer.innerHTML = '<div style="color: #e53935;">Failed to load arrival times</div>';
+        
+        // If we have cached data, keep showing it with a warning
+        if (cachedBusData && lastUpdateTime) {
+            // Show subtle warning
+            if (warningElement) {
+                warningElement.style.display = 'block';
+                warningElement.textContent = '⚠️ Using last known data';
+            }
+            
+            // Keep displaying cached data
+            displayBusServices(cachedBusData, busServicesContainer);
+            displayIncomingBuses(cachedBusData, incomingBusesContainer);
+            
+            // Update timestamp to show it's stale
+            if (lastUpdateElement) {
+                lastUpdateElement.textContent = `Last updated: ${formatTime(lastUpdateTime)}`;
+            }
+        } else {
+            // No cached data available, show error
+            busServicesContainer.innerHTML = '<div style="color: #e53935;">Failed to load bus services</div>';
+            incomingBusesContainer.innerHTML = '<div style="color: #e53935;">Failed to load arrival times</div>';
+        }
     }
+}
+
+// Update countdown timers smoothly (called every second)
+function updateBusCountdowns() {
+    const arrivalElements = document.querySelectorAll('.bus-arrival');
+    arrivalElements.forEach(element => {
+        const estimatedArrival = element.dataset.estimatedArrival;
+        if (estimatedArrival) {
+            const timeElement = element.querySelector('.arrival-time');
+            if (timeElement) {
+                timeElement.textContent = calculateArrivalTime(estimatedArrival);
+            }
+        }
+    });
+}
+
+// Update countdown timers smoothly (called every second)
+function updateBusCountdowns() {
+    const arrivalElements = document.querySelectorAll('.bus-arrival');
+    arrivalElements.forEach(element => {
+        const estimatedArrival = element.dataset.estimatedArrival;
+        if (estimatedArrival) {
+            const timeElement = element.querySelector('.arrival-time');
+            if (timeElement) {
+                timeElement.textContent = calculateArrivalTime(estimatedArrival);
+            }
+        }
+    });
 }
 
 // Display bus service numbers
@@ -552,6 +646,20 @@ function displayBusServices(services, container) {
         serviceElement.className = 'bus-number';
         serviceElement.textContent = service.ServiceNo;
         container.appendChild(serviceElement);
+    });
+}
+
+// Update countdown timers smoothly (called every second)
+function updateBusCountdowns() {
+    const arrivalElements = document.querySelectorAll('.bus-arrival');
+    arrivalElements.forEach(element => {
+        const estimatedArrival = element.dataset.estimatedArrival;
+        if (estimatedArrival) {
+            const timeElement = element.querySelector('.arrival-time');
+            if (timeElement) {
+                timeElement.textContent = calculateArrivalTime(estimatedArrival);
+            }
+        }
     });
 }
 
@@ -599,6 +707,7 @@ function displayIncomingBuses(services, container) {
     displayBuses.forEach(bus => {
         const busElement = document.createElement('div');
         busElement.className = 'bus-arrival';
+        busElement.dataset.estimatedArrival = bus.EstimatedArrival; // Store for smooth countdown
         
         const arrivalTime = calculateArrivalTime(bus.EstimatedArrival);
         const loadColor = getLoadColor(bus.Load);
@@ -614,6 +723,13 @@ function displayIncomingBuses(services, container) {
         
         container.appendChild(busElement);
     });
+}
+
+// Format time as HH:MM
+function formatTime(date) {
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
 }
 
 // Calculate arrival time in minutes
@@ -656,4 +772,19 @@ function getLoadText(load) {
 function hideBottomSheet() {
     bottomSheet.classList.remove('active');
     bottomSheet.style.transform = '';
+    
+    // Clear all intervals
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+    }
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    
+    // Clear state
+    currentBusStopCode = null;
+    cachedBusData = null;
+    lastUpdateTime = null;
 }
