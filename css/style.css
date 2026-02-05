@@ -56,17 +56,17 @@ html, body {
 /* Direction wedge on blue dot */
 .direction-wedge {
     position: absolute;
-    width: 0;
-    height: 0;
-    border-left: 35px solid transparent;
-    border-right: 35px solid transparent;
-    border-top: 70px solid rgba(66, 133, 244, 0.3);
+    z-index: -1;
+    width: 70px;
+    height: 70px;
     bottom: 50%;
     left: 50%;
     transform-origin: 50% 100%;
     margin-left: -35px;
     margin-bottom: -2px;
     pointer-events: none;
+    background: linear-gradient(to top, rgba(66, 133, 244, 0.7), rgba(66, 133, 244, 0.05));
+    clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
 }
 
 /* Bottom sheet container */
