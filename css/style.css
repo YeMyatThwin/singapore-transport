@@ -1,3 +1,4 @@
+/* Reset and base styles */
 * {
     margin: 0;
     padding: 0;
@@ -7,7 +8,7 @@
 html, body {
     height: 100%;
     width: 100%;
-    font-family: Arial, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     overflow: hidden;
 }
 
@@ -48,240 +49,476 @@ html, body {
     background-color: #4285F4;
     border: 3px solid white;
     border-radius: 50%;
-    box-shadow: 0 0 0 rgba(66, 133, 244, 0.4);
-    animation: pulse 2s infinite;
     position: relative;
+    box-shadow: 0 0 10px rgba(66, 133, 244, 0.5);
 }
 
+/* Direction wedge on blue dot */
 .direction-wedge {
     position: absolute;
+    top: 50%;
+    left: 50%;
     width: 0;
     height: 0;
-    border-left: 35px solid transparent;
-    border-right: 35px solid transparent;
-    border-top: 70px solid rgba(66, 133, 244, 0.3);
-    bottom: 50%;
-    left: 50%;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 12px solid #1967D2;
     transform-origin: 50% 100%;
-    margin-left: -35px;
-    margin-bottom: -2px;
-    pointer-events: none;
+    transform: translate(-50%, -150%);
 }
 
-/* Bus stop icon styling */
-.bus-stop-icon {
-    cursor: pointer;
-    transition: transform 0.2s ease;
-}
-
-.bus-stop-icon:hover {
-    transform: scale(1.1);
-}
-
-@keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.7);
-    }
-    70% {
-        box-shadow: 0 0 0 10px rgba(66, 133, 244, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(66, 133, 244, 0);
-    }
-}
-
-/* Bottom Sheet Styling */
+/* Bottom sheet container */
 .bottom-sheet {
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    background: white;
+    width: 100%;
+    height: 60vh;
+    min-height: 450px;
+    background-color: #FFFFFF;
     border-radius: 20px 20px 0 0;
-    box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
     transform: translateY(100%);
-    transition: transform 0.3s ease-out;
+    transition: transform 0.3s ease;
     z-index: 1000;
-    max-height: 70vh;
-    display: flex;
-    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .bottom-sheet.active {
     transform: translateY(0);
 }
 
-.bottom-sheet-handle {
-    width: 40px;
-    height: 4px;
-    background: #ddd;
-    border-radius: 2px;
-    margin: 12px auto;
-    cursor: grab;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: none;
+@media (min-width: 768px) {
+    .bottom-sheet {
+        width: 375px;
+        max-width: 40vw;
+        height: 100vh;
+        min-height: 100vh;
+        border-radius: 0;
+        box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+        left: 0;
+        right: auto;
+        transform: translateX(-100%);
+    }
+    
+    .bottom-sheet.active {
+        transform: translateX(0);
+    }
 }
 
+/* Handle bar */
+.handle-bar {
+    width: 40px;
+    height: 5px;
+    background-color: #D9D9D9;
+    border-radius: 2.5px;
+    margin: 12px auto 0;
+}
+
+.bottom-sheet-handle {
+    width: 40px;
+    height: 5px;
+    background-color: #D9D9D9;
+    border-radius: 2.5px;
+    margin: 12px auto 0;
+    cursor: grab;
+}
+
+@media (min-width: 768px) {
+    .handle-bar {
+        display: none;
+    }
+    
+    .bottom-sheet-handle {
+        display: none;
+    }
+}
+
+/* Bottom sheet content */
 .bottom-sheet-content {
-    flex: 1;
-    overflow: hidden;
+    height: 100%;
     display: flex;
     flex-direction: column;
 }
 
+/* Header */
+.header {
+    padding: 28px 24px 0;
+}
+
 .bottom-sheet-header {
+    padding: 28px 24px 0;
+    position: relative;
+}
+
+.header-content {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    padding: 0 20px 16px;
-    border-bottom: 1px solid #eee;
 }
 
-.bottom-sheet-header h2 {
-    font-size: 18px;
-    font-weight: 600;
-    color: #333;
+.header-left {
+    flex: 1;
+}
+
+.bus-stop-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: #000000;
+    line-height: 24px;
     margin: 0;
-    line-height: 1.4;
+    letter-spacing: 0;
+}
+
+#busStopTitle {
+    font-size: 20px;
+    font-weight: 700;
+    color: #000000;
+    line-height: 24px;
+    margin: 0;
+    letter-spacing: 0;
+}
+
+#busStopTitle .road-name {
+    font-size: 14px;
+    font-weight: 400;
+    color: #808080;
+    line-height: 17px;
+    margin: 5px 0 0;
+    letter-spacing: 0;
+    display: block;
+}
+
+.road-name {
+    font-size: 14px;
+    font-weight: 400;
+    color: #808080;
+    line-height: 17px;
+    margin: 5px 0 0;
+    letter-spacing: 0;
+}
+
+.header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.refresh-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    align-self: flex-end;
+}
+
+.refresh-icon svg {
+    transform: rotate(0deg);
+}
+
+.last-updated {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 8px;
+    line-height: 10px;
+    color: #808080;
+    gap: 2px;
+}
+
+.update-label {
+    font-weight: 400;
+}
+
+.update-time {
+    font-weight: 400;
+    font-size: 10px;
 }
 
 .close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
     background: none;
     border: none;
     font-size: 32px;
-    color: #999;
     cursor: pointer;
-    padding: 0;
+    color: #666;
     width: 32px;
     height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
     line-height: 1;
-    margin-left: 12px;
-    flex-shrink: 0;
 }
 
 .close-btn:hover {
-    color: #333;
+    color: #000;
 }
 
+/* Divider */
+.divider {
+    width: 100%;
+    height: 1px;
+    background-color: #E6E6E6;
+    margin-top: 16px;
+}
+
+/* Bottom sheet body */
 .bottom-sheet-body {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding-bottom: 20px;
 }
 
-.update-status {
-    padding: 8px 20px 0 20px;
+/* Service row */
+.service-row {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
+    padding: 10px 0;
+    padding-left: 24px;
+    margin: 0;
+    border-bottom: 1px solid transparent;
+    overflow: hidden;
+    position: relative;
 }
 
-.info-section {
-    margin-bottom: 24px;
+.service-row::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 80px;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.8) 50%, rgba(255, 255, 255, 1));
+    pointer-events: none;
+    z-index: 1;
 }
 
-.info-section:last-child {
+.service-row:not(:last-child) {
     margin-bottom: 0;
 }
 
-.info-section h3 {
-    font-size: 14px;
-    font-weight: 600;
-    color: #666;
-    margin-bottom: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+/* Service number */
+.service-number {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 76px;
+    padding-top: 20px;
 }
 
-.bus-services {
+.service-number .number {
+    font-size: 24px;
+    font-weight: 700;
+    color: #000000;
+    line-height: 29px;
+    letter-spacing: 0;
+}
+
+.service-number .operator {
+    font-size: 10px;
+    font-weight: 500;
+    color: #999999;
+    line-height: 12px;
+    margin-top: 4px;
+    letter-spacing: 0;
+}
+
+/* Arrival cards container */
+.arrival-cards {
     display: flex;
-    flex-wrap: wrap;
+    gap: 8px;
+    flex-wrap: nowrap;
+    flex: 1;
+    padding-top: 18px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-right: 68px;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+}
+
+.arrival-cards::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+/* Arrival card */
+.arrival-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px 8px 12px;
+    background-color: #F5F5F7;
+    border: 1px solid #E5E5EB;
+    border-radius: 8px;
+    min-width: 100px;
+    height: 49px;
     gap: 8px;
 }
 
-.bus-number {
-    background: #4285F4;
-    color: white;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 14px;
-    min-width: 50px;
-    text-align: center;
-}
-
-.incoming-buses {
+/* Arrival time group */
+.arrival-time-group {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 0;
 }
 
-.bus-arrival {
+.arrival-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: #333340;
+    line-height: 17px;
+    letter-spacing: 0;
+}
+
+/* Status tags */
+.status-tag {
+    font-size: 7.25px;
+    font-weight: 700;
+    line-height: 9px;
+    text-align: left;
+    letter-spacing: 0;
+    margin-top: 0;
+}
+
+.status-standing {
+    color: #FFA600;
+}
+
+.status-crowded {
+    color: #E54040;
+}
+
+/* Bus icon placeholder */
+.bus-icon-placeholder {
+    width: 22px;
+    height: 17px;
     display: flex;
     align-items: center;
-    padding: 12px;
-    background: #f8f9fa;
-    border-radius: 12px;
-    gap: 16px;
-}
-
-.bus-arrival-number {
-    background: #4285F4;
-    color: white;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 16px;
-    min-width: 50px;
-    text-align: center;
+    justify-content: center;
     flex-shrink: 0;
 }
 
-.bus-arrival-info {
-    flex: 1;
+.bus-icon-placeholder svg {
+    width: 100%;
+    height: 100%;
 }
 
-.arrival-time {
-    font-size: 16px;
-    font-weight: 600;
-    color: #333;
-    margin-bottom: 4px;
+/* Bus icon status colors */
+.bus-icon-placeholder.status-ok .bus-color {
+    fill: #1AB24D;
 }
 
-.bus-load {
-    font-size: 13px;
-    color: #666;
+.bus-icon-placeholder.status-standing .bus-color {
+    fill: #FFA600;
 }
 
-/* Responsive adjustments for mobile devices */
-@media screen and (max-width: 768px) {
-    #map {
-        height: 100vh;
-        width: 100vw;
+.bus-icon-placeholder.status-crowded .bus-color {
+    fill: #E54040;
+}
+
+.bus-icon-placeholder.status-default .bus-color {
+    fill: white;
+}
+
+/* Scrollbar styling */
+.bottom-sheet::-webkit-scrollbar {
+    width: 0px;
+}
+
+.bottom-sheet::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.bottom-sheet::-webkit-scrollbar-thumb {
+    background: #D9D9D9;
+    border-radius: 10px;
+}
+
+/* Mobile specific */
+@media (max-width: 767px) {
+    .bottom-sheet {
+        border-radius: 20px 20px 0 0;
+    }
+}
+
+/* Desktop: center content with max-width */
+@media (min-width: 768px) {
+    body {
+        background-color: #f0f0f0;
+        align-items: stretch;
+    }
+}
+
+/* Retract button for desktop */
+.retract-button {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .retract-button {
+        display: flex;
+        position: fixed;
+        left: min(375px, 40vw);
+        top: 50%;
+        transform: translateY(-50%);
+        width: 40px;
+        height: 80px;
+        background-color: #FFFFFF;
+        border-radius: 0 12px 12px 0;
+        box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1000;
+        transition: left 0.3s ease;
+        border: none;
     }
     
-    .bottom-sheet {
-        max-height: 80vh;
+    .retract-button:hover {
+        background-color: #F5F5F7;
+    }
+    
+    .retract-button:active {
+        background-color: #E5E5EB;
+    }
+    
+    .retract-button.retracted {
+        left: 0;
+    }
+    
+    .retract-button svg {
+        transition: transform 0.3s ease;
+    }
+    
+    .retract-button.retracted svg {
+        transform: rotate(180deg);
     }
 }
 
-/* Responsive adjustments for tablets */
-@media screen and (min-width: 769px) and (max-width: 1024px) {
-    #map {
-        height: 100vh;
-        width: 100vw;
-    }
+/* Ensure Inter font is loaded */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+
+/* Animation for refresh icon */
+.refresh-icon:active {
+    transform: scale(0.95);
 }
 
-/* Responsive adjustments for desktop */
-@media screen and (min-width: 1025px) {
-    #map {
-        height: 100vh;
-        width: 100vw;
+.refresh-icon.rotating svg {
+    animation: rotate 0.6s ease-in-out;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(-360deg);
     }
 }

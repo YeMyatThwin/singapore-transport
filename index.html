@@ -1,68 +1,63 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google Maps Test</title>
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BusSin</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
     <div id="map"></div>
-    
+
     <!-- Bottom Sheet -->
     <div id="bottomSheet" class="bottom-sheet">
-        <div class="bottom-sheet-handle"></div>
-        <div class="bottom-sheet-content">
-            <div class="bottom-sheet-header">
-                <h2 id="busStopTitle"></h2>
-                <button id="closeBottomSheet" class="close-btn">&times;</button>
+      <div class="bottom-sheet-handle"></div>
+      <div class="bottom-sheet-content">
+        <div class="bottom-sheet-header">
+          <button id="closeBottomSheet" class="close-btn">&times;</button>
+          <div class="header-content">
+            <div class="header-left">
+              <h1 id="busStopTitle" class="bus-stop-name"></h1>
             </div>
-            <div class="bottom-sheet-body">
-                <div class="update-status">
-                    <span id="lastUpdate" style="color: #666; font-size: 12px;">Last updated: --:--</span>
-                    <span id="updateWarning" style="display: none; color: #ff9800; font-size: 12px; margin-left: 10px;"></span>
-                </div>
-                <div class="info-section">
-                    <h3>Available Bus Services</h3>
-                    <div id="busServices" class="bus-services">
-                        <div class="bus-number">5</div>
-                        <div class="bus-number">12</div>
-                        <div class="bus-number">32</div>
-                        <div class="bus-number">100</div>
-                        <div class="bus-number">107</div>
-                    </div>
-                </div>
-                <div class="info-section">
-                    <h3>Incoming Buses</h3>
-                    <div id="incomingBuses" class="incoming-buses">
-                        <div class="bus-arrival">
-                            <div class="bus-arrival-number">5</div>
-                            <div class="bus-arrival-info">
-                                <div class="arrival-time">Arriving</div>
-                                <div class="bus-load">Seats Available</div>
-                            </div>
-                        </div>
-                        <div class="bus-arrival">
-                            <div class="bus-arrival-number">12</div>
-                            <div class="bus-arrival-info">
-                                <div class="arrival-time">3 min</div>
-                                <div class="bus-load">Standing Available</div>
-                            </div>
-                        </div>
-                        <div class="bus-arrival">
-                            <div class="bus-arrival-number">107</div>
-                            <div class="bus-arrival-info">
-                                <div class="arrival-time">8 min</div>
-                                <div class="bus-load">Limited Standing</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div class="header-right">
+              <div class="refresh-icon">
+                <svg
+                  width="36"
+                  height="36"
+                  viewBox="0 0 36 36"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M23.3263 16.1506C23.9365 16.2121 24.4701 15.8438 24.5154 15.327L24.6608 13.6963C24.6536 13.6515 24.6648 13.5675 24.6803 13.4737C27.2756 16.4001 27.2205 20.3571 24.4732 23.0432C22.3517 25.1182 19.0161 25.9867 15.7681 25.31C15.4127 25.2364 15.0474 25.3316 14.8147 25.5595C14.7104 25.6615 14.6378 25.787 14.6053 25.9223C14.5342 26.2212 14.6621 26.5357 14.94 26.7438C15.0657 26.8375 15.2169 26.9042 15.3778 26.9378C19.3356 27.7627 23.4011 26.7037 25.9879 24.174C29.3646 20.8717 29.4137 15.991 26.1695 12.4143C26.2109 12.4194 26.2479 12.4255 26.2718 12.434L28.3835 12.6472C28.9935 12.708 29.527 12.3395 29.5729 11.8238C29.6189 11.3068 29.1604 10.8381 28.5491 10.776L23.8453 10.3012C23.5253 10.2687 23.2265 10.3548 23.0083 10.5184C22.8105 10.6669 22.6786 10.8788 22.6569 11.1251L22.3032 15.1031C22.2568 15.6196 22.7152 16.0887 23.3263 16.1506ZM24.4208 11.9773C24.4111 11.9845 24.4021 11.992 24.3933 11.9997C24.3925 11.9832 24.4019 11.9765 24.4208 11.9773Z"
+                    fill="#7BA7FF"
+                  />
+                  <path
+                    d="M6.55312 24.7475L11.2566 25.2228C11.5762 25.2549 11.8755 25.1689 12.0939 25.0054C12.2919 24.8571 12.4236 24.6443 12.4453 24.3988L12.7995 20.4204C12.845 19.9035 12.3868 19.4342 11.7757 19.3726C11.1657 19.3118 10.6317 19.6792 10.5868 20.1961L10.4409 21.8275C10.4477 21.869 10.4385 21.9447 10.4245 22.03C7.87229 19.1083 7.94243 15.1796 10.6743 12.5077C12.7965 10.433 16.1319 9.56425 19.3791 10.2411C19.7348 10.3149 20.0998 10.2195 20.3325 9.99201C20.4371 9.89024 20.5099 9.76454 20.5422 9.62901C20.6137 9.33015 20.4854 9.01524 20.207 8.80749C20.0818 8.71424 19.9304 8.64726 19.7697 8.61347C15.8117 7.78875 11.7464 8.84763 9.15954 11.3777C5.79127 14.6719 5.73504 19.5373 8.95638 23.1112C8.90441 23.1064 8.85809 23.0993 8.82981 23.0892L6.71802 22.876C6.10778 22.8154 5.57457 23.1837 5.52916 23.6991C5.48292 24.2166 5.94139 24.6853 6.55312 24.7475Z"
+                    fill="#7BA7FF"
+                  />
+                </svg>
+              </div>
+              <div class="last-updated">
+                <span class="update-label">last updated</span>
+                <span id="lastUpdate" class="update-time">--:--</span>
+              </div>
             </div>
+          </div>
         </div>
+
+        <div class="divider"></div>
+
+        <div class="bottom-sheet-body" id="servicesContainer">
+          <!-- Service rows will be dynamically inserted here -->
+        </div>
+      </div>
     </div>
-    
+
     <script src="js/app.js"></script>
-    <script async src="https://maps.googleapis.com/maps/api/js?key=API_KEY_PLACEHOLDER&callback=initMap&libraries=marker"></script>
-</body>
+    <script
+      async
+      src="https://maps.googleapis.com/maps/api/js?key=API_KEY_PLACEHOLDER&callback=initMap&libraries=marker"
+    ></script>
+  </body>
 </html>
