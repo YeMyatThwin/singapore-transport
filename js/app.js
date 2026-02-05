@@ -41,6 +41,10 @@ function initMap() {
             if (userLocationMarker) {
                 map.setCenter(userLocationMarker.position);
                 map.setZoom(15);
+            } else {
+                // Not tracking yet - try to start location tracking
+                // This allows users to retry if they previously denied permission
+                startLocationTracking();
             }
 
             // Request orientation permission on button click (works on iOS)
@@ -183,11 +187,13 @@ function startLocationTracking() {
                     },
                     (error) => {
                         console.error("Error tracking location:", error);
+                        // Don't show alert for timeout during continuous tracking
+                        // Just log it and keep trying
                     },
                     {
                         enableHighAccuracy: true,
-                        maximumAge: 0,
-                        timeout: 5000
+                        maximumAge: 10000, // Allow cached position up to 10 seconds old
+                        timeout: 30000 // Increased to 30 seconds
                     }
                 );
             }
@@ -199,21 +205,25 @@ function startLocationTracking() {
             switch (error.code) {
                 case error.PERMISSION_DENIED:
                     errorMsg += "Permission denied. Please enable location access in your browser settings.";
+                    alert(errorMsg);
                     break;
                 case error.POSITION_UNAVAILABLE:
-                    errorMsg += "Location information is unavailable.";
+                    errorMsg += "Location information is unavailable. Make sure GPS is enabled.";
+                    alert(errorMsg);
                     break;
                 case error.TIMEOUT:
-                    errorMsg += "Location request timed out.";
+                    // For timeout, just log it - don't show intrusive alert
+                    console.warn("Location request timed out. This may happen indoors or with weak GPS signal.");
+                    // Optionally show a less intrusive notification
                     break;
                 default:
                     errorMsg += "An unknown error occurred.";
+                    alert(errorMsg);
             }
-            alert(errorMsg);
         },
         {
             enableHighAccuracy: true,
-            timeout: 10000,
+            timeout: 30000, // Increased to 30 seconds
             maximumAge: 0
         }
     );
