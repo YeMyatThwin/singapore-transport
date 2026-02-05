@@ -53,18 +53,34 @@ html, body {
     box-shadow: 0 0 10px rgba(66, 133, 244, 0.5);
 }
 
-/* Direction wedge on blue dot */
+/* Direction wedge on blue dot - Flashlight beam effect */
 .direction-wedge {
     position: absolute;
     top: 50%;
     left: 50%;
     width: 0;
     height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-bottom: 12px solid #1967D2;
+    border-left: 40px solid transparent;
+    border-right: 40px solid transparent;
+    border-bottom: 80px solid rgba(66, 133, 244, 0.25);
     transform-origin: 50% 100%;
-    transform: translate(-50%, -150%);
+    transform: translate(-50%, -100%);
+    filter: blur(2px);
+    pointer-events: none;
+}
+
+/* Inner bright cone for depth */
+.direction-wedge::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-left: 20px solid transparent;
+    border-right: 20px solid transparent;
+    border-bottom: 40px solid rgba(66, 133, 244, 0.4);
+    transform: translate(-50%, 0);
 }
 
 /* Bottom sheet container */
