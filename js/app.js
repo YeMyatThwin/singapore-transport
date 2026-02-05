@@ -10,6 +10,7 @@ let refreshInterval = null; // Store auto-refresh interval
 let countdownInterval = null; // Store countdown animation interval
 let lastUpdateTime = null; // Store last successful update time
 let cachedBusData = null; // Store last known bus data
+let isOpening = false; // Flag to prevent click-outside from closing when opening
 
 function initMap() {
     // The map
@@ -417,12 +418,8 @@ function createBusStopMarker(stop, size = 28) {
 // Initialize bottom sheet functionality
 function initBottomSheet() {
     bottomSheet = document.getElementById('bottomSheet');
-    const closeBtn = document.getElementById('closeBottomSheet');
     const handle = document.querySelector('.bottom-sheet-handle');
     const refreshIcon = document.querySelector('.refresh-icon');
-
-    // Close button
-    closeBtn.addEventListener('click', hideBottomSheet);
 
     // Refresh icon click
     if (refreshIcon) {
@@ -438,9 +435,15 @@ function initBottomSheet() {
     }
 
     // Click outside to close
-    bottomSheet.addEventListener('click', (e) => {
-        if (e.target === bottomSheet) {
-            hideBottomSheet();
+    document.addEventListener('click', (e) => {
+        if (isOpening) {
+            return; // Don't close if we're in the process of opening
+        }
+        if (bottomSheet.classList.contains('active')) {
+            const bottomSheetContent = document.querySelector('.bottom-sheet-content');
+            if (bottomSheetContent && !bottomSheetContent.contains(e.target) && !e.target.closest('.bottom-sheet-handle')) {
+                hideBottomSheet();
+            }
         }
     });
 
@@ -521,6 +524,9 @@ function initBottomSheet() {
 async function showBottomSheet(stop) {
     const title = document.getElementById('busStopTitle');
 
+    // Set flag to prevent click-outside from closing immediately
+    isOpening = true;
+    
     // Set title with bus stop code, description, and road name on new line
     title.innerHTML = `${stop.BusStopCode} - ${stop.Description}<br><span class="road-name">${stop.RoadName}</span>`;
 
@@ -529,6 +535,11 @@ async function showBottomSheet(stop) {
 
     // Add active class to show the sheet
     bottomSheet.classList.add('active');
+    
+    // Clear opening flag after a short delay
+    setTimeout(() => {
+        isOpening = false;
+    }, 300);
 
     // Fetch real bus arrival data
     await fetchBusArrivalData(stop.BusStopCode);
