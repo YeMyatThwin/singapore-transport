@@ -412,20 +412,20 @@ html, body {
 }
 
 /* Bus icon status colors */
-.bus-icon-placeholder.status-ok .bus-color {
-    fill: #1AB24D;
+.bus-icon-placeholder.status-ok {
+    color: #1AB24D;
 }
 
-.bus-icon-placeholder.status-standing .bus-color {
-    fill: #FFA600;
+.bus-icon-placeholder.status-standing {
+    color: #FFA600;
 }
 
-.bus-icon-placeholder.status-crowded .bus-color {
-    fill: #E54040;
+.bus-icon-placeholder.status-crowded {
+    color: #E54040;
 }
 
-.bus-icon-placeholder.status-default .bus-color {
-    fill: white;
+.bus-icon-placeholder.status-default {
+    color: white;
 }
 
 /* Scrollbar styling */
