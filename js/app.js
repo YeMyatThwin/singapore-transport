@@ -10,6 +10,7 @@ let refreshInterval = null; // Store auto-refresh interval
 let countdownInterval = null; // Store countdown animation interval
 let lastUpdateTime = null; // Store last successful update time
 let cachedBusData = null; // Store last known bus data
+let isOpening = false; // Flag to prevent click-outside from closing when opening
 
 function initMap() {
     // The map
@@ -417,16 +418,32 @@ function createBusStopMarker(stop, size = 28) {
 // Initialize bottom sheet functionality
 function initBottomSheet() {
     bottomSheet = document.getElementById('bottomSheet');
-    const closeBtn = document.getElementById('closeBottomSheet');
     const handle = document.querySelector('.bottom-sheet-handle');
+    const refreshIcon = document.querySelector('.refresh-icon');
 
-    // Close button
-    closeBtn.addEventListener('click', hideBottomSheet);
+    // Refresh icon click
+    if (refreshIcon) {
+        refreshIcon.addEventListener('click', () => {
+            if (currentBusStopCode) {
+                refreshIcon.classList.add('rotating');
+                fetchBusArrivalData(currentBusStopCode);
+                setTimeout(() => {
+                    refreshIcon.classList.remove('rotating');
+                }, 600);
+            }
+        });
+    }
 
     // Click outside to close
-    bottomSheet.addEventListener('click', (e) => {
-        if (e.target === bottomSheet) {
-            hideBottomSheet();
+    document.addEventListener('click', (e) => {
+        if (isOpening) {
+            return; // Don't close if we're in the process of opening
+        }
+        if (bottomSheet.classList.contains('active')) {
+            const bottomSheetContent = document.querySelector('.bottom-sheet-content');
+            if (bottomSheetContent && !bottomSheetContent.contains(e.target) && !e.target.closest('.bottom-sheet-handle')) {
+                hideBottomSheet();
+            }
         }
     });
 
@@ -444,10 +461,10 @@ function initBottomSheet() {
 
     handle.addEventListener('touchmove', (e) => {
         if (!isDragging) return;
-        
+
         currentY = e.touches[0].clientY;
         const diff = currentY - startY;
-        
+
         // Only allow dragging downward
         if (diff > 0) {
             bottomSheet.style.transform = `translateY(${diff}px)`;
@@ -466,10 +483,10 @@ function initBottomSheet() {
 
     document.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
-        
+
         currentY = e.clientY;
         const diff = currentY - startY;
-        
+
         // Only allow dragging downward
         if (diff > 0) {
             bottomSheet.style.transform = `translateY(${diff}px)`;
@@ -486,9 +503,9 @@ function initBottomSheet() {
         const diff = currentY - startY;
         const screenHeight = window.innerHeight;
         const threshold = screenHeight * 0.3; // 30% of screen height
-        
+
         bottomSheet.style.transition = 'transform 0.3s ease-out';
-        
+
         // If dragged down more than 30% of screen, close it
         if (diff > threshold) {
             hideBottomSheet();
@@ -496,7 +513,7 @@ function initBottomSheet() {
             // Snap back to open position
             bottomSheet.style.transform = 'translateY(0)';
         }
-        
+
         isDragging = false;
         startY = 0;
         currentY = 0;
@@ -506,19 +523,27 @@ function initBottomSheet() {
 // Show bottom sheet with bus stop data
 async function showBottomSheet(stop) {
     const title = document.getElementById('busStopTitle');
-    
+
+    // Set flag to prevent click-outside from closing immediately
+    isOpening = true;
+
     // Set title with bus stop code, description, and road name on new line
-    title.innerHTML = `${stop.BusStopCode} - ${stop.Description}<br><span style="font-size: 14px; font-weight: 400; color: #666;">${stop.RoadName}</span>`;
-    
+    title.innerHTML = `${stop.BusStopCode} - ${stop.Description}<br><span class="road-name">${stop.RoadName}</span>`;
+
     // Store current bus stop code for auto-refresh
     currentBusStopCode = stop.BusStopCode;
-    
+
     // Add active class to show the sheet
     bottomSheet.classList.add('active');
-    
+
+    // Clear opening flag after a short delay
+    setTimeout(() => {
+        isOpening = false;
+    }, 300);
+
     // Fetch real bus arrival data
     await fetchBusArrivalData(stop.BusStopCode);
-    
+
     // Clear any existing intervals
     if (refreshInterval) {
         clearInterval(refreshInterval);
@@ -526,12 +551,12 @@ async function showBottomSheet(stop) {
     if (countdownInterval) {
         clearInterval(countdownInterval);
     }
-    
+
     // Start smooth countdown animation (updates every second)
     countdownInterval = setInterval(() => {
         updateBusCountdowns();
     }, 1000); // Update every second
-    
+
     // Start auto-refresh every 30 seconds
     refreshInterval = setInterval(() => {
         if (currentBusStopCode && bottomSheet.classList.contains('active')) {
@@ -542,186 +567,212 @@ async function showBottomSheet(stop) {
 
 // Fetch and display bus arrival data from LTA API
 async function fetchBusArrivalData(busStopCode) {
-    const busServicesContainer = document.getElementById('busServices');
-    const incomingBusesContainer = document.getElementById('incomingBuses');
+    const servicesContainer = document.getElementById('servicesContainer');
     const lastUpdateElement = document.getElementById('lastUpdate');
-    const warningElement = document.getElementById('updateWarning');
-    
+
     // Only show loading state on first load (when no cached data)
     if (!cachedBusData) {
-        busServicesContainer.innerHTML = '<div style="color: #999;">Loading...</div>';
-        incomingBusesContainer.innerHTML = '<div style="color: #999;">Loading...</div>';
+        servicesContainer.innerHTML = '<div style="color: #999; padding: 24px;">Loading...</div>';
     }
-    
+
     try {
         const response = await fetch(`/api/bus-arrival?busStopCode=${busStopCode}`);
         const data = await response.json();
-        
+
         if (!data.Services || data.Services.length === 0) {
-            busServicesContainer.innerHTML = '<div style="color: #999;">No buses available at this stop</div>';
-            incomingBusesContainer.innerHTML = '<div style="color: #999;">No incoming buses</div>';
+            servicesContainer.innerHTML = '<div style="color: #999; padding: 24px;">No buses available at this stop</div>';
             return;
         }
-        
+
         // Cache successful data
         cachedBusData = data.Services;
         lastUpdateTime = new Date();
-        
-        // Hide warning on successful update
-        if (warningElement) {
-            warningElement.style.display = 'none';
-        }
-        
+
         // Update last update time
         if (lastUpdateElement) {
-            lastUpdateElement.textContent = `Last updated: ${formatTime(lastUpdateTime)}`;
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const ampm = hours >= 12 ? 'pm' : 'am';
+            const displayHours = hours % 12 || 12;
+            const displayMinutes = minutes.toString().padStart(2, '0');
+            lastUpdateElement.textContent = `${displayHours}:${displayMinutes}${ampm}`;
         }
-        
-        // Display available bus services
-        displayBusServices(data.Services, busServicesContainer);
-        
-        // Display incoming buses
-        displayIncomingBuses(data.Services, incomingBusesContainer);
-        
+
+        // Display services in new format
+        displayServicesInNewFormat(data.Services, servicesContainer);
+
     } catch (error) {
         console.error('Error fetching bus arrival data:', error);
-        
-        // If we have cached data, keep showing it with a warning
+
+        // If we have cached data, keep showing it
         if (cachedBusData && lastUpdateTime) {
-            // Show subtle warning
-            if (warningElement) {
-                warningElement.style.display = 'block';
-                warningElement.textContent = '⚠️ Using last known data';
-            }
-            
-            // Keep displaying cached data
-            displayBusServices(cachedBusData, busServicesContainer);
-            displayIncomingBuses(cachedBusData, incomingBusesContainer);
-            
-            // Update timestamp to show it's stale
-            if (lastUpdateElement) {
-                lastUpdateElement.textContent = `Last updated: ${formatTime(lastUpdateTime)}`;
-            }
+            displayServicesInNewFormat(cachedBusData, servicesContainer);
         } else {
             // No cached data available, show error
-            busServicesContainer.innerHTML = '<div style="color: #e53935;">Failed to load bus services</div>';
-            incomingBusesContainer.innerHTML = '<div style="color: #e53935;">Failed to load arrival times</div>';
+            servicesContainer.innerHTML = '<div style="color: #e53935; padding: 24px;">Failed to load bus services</div>';
         }
     }
 }
 
-// Update countdown timers smoothly (called every second)
-function updateBusCountdowns() {
-    const arrivalElements = document.querySelectorAll('.bus-arrival');
-    arrivalElements.forEach(element => {
-        const estimatedArrival = element.dataset.estimatedArrival;
-        if (estimatedArrival) {
-            const timeElement = element.querySelector('.arrival-time');
-            if (timeElement) {
-                timeElement.textContent = calculateArrivalTime(estimatedArrival);
-            }
-        }
-    });
-}
-
-// Update countdown timers smoothly (called every second)
-function updateBusCountdowns() {
-    const arrivalElements = document.querySelectorAll('.bus-arrival');
-    arrivalElements.forEach(element => {
-        const estimatedArrival = element.dataset.estimatedArrival;
-        if (estimatedArrival) {
-            const timeElement = element.querySelector('.arrival-time');
-            if (timeElement) {
-                timeElement.textContent = calculateArrivalTime(estimatedArrival);
-            }
-        }
-    });
-}
-
-// Display bus service numbers
-function displayBusServices(services, container) {
+// Display services in new format with service rows and arrival cards
+function displayServicesInNewFormat(services, container) {
     container.innerHTML = '';
-    services.forEach(service => {
-        const serviceElement = document.createElement('div');
-        serviceElement.className = 'bus-number';
-        serviceElement.textContent = service.ServiceNo;
-        container.appendChild(serviceElement);
-    });
-}
 
-// Update countdown timers smoothly (called every second)
-function updateBusCountdowns() {
-    const arrivalElements = document.querySelectorAll('.bus-arrival');
-    arrivalElements.forEach(element => {
-        const estimatedArrival = element.dataset.estimatedArrival;
-        if (estimatedArrival) {
-            const timeElement = element.querySelector('.arrival-time');
-            if (timeElement) {
-                timeElement.textContent = calculateArrivalTime(estimatedArrival);
-            }
-        }
+    // Sort services by service number (numerically)
+    const sortedServices = services.sort((a, b) => {
+        const numA = parseInt(a.ServiceNo);
+        const numB = parseInt(b.ServiceNo);
+        return numA - numB;
     });
-}
 
-// Display incoming buses with arrival times
-function displayIncomingBuses(services, container) {
-    container.innerHTML = '';
-    
-    // Collect all incoming buses from all services
-    const allBuses = [];
-    services.forEach(service => {
-        if (service.NextBus && service.NextBus.EstimatedArrival) {
-            allBuses.push({
-                serviceNo: service.ServiceNo,
-                operator: service.Operator,
-                ...service.NextBus
-            });
-        }
-        if (service.NextBus2 && service.NextBus2.EstimatedArrival) {
-            allBuses.push({
-                serviceNo: service.ServiceNo,
-                operator: service.Operator,
-                ...service.NextBus2
-            });
-        }
-        if (service.NextBus3 && service.NextBus3.EstimatedArrival) {
-            allBuses.push({
-                serviceNo: service.ServiceNo,
-                operator: service.Operator,
-                ...service.NextBus3
-            });
-        }
-    });
-    
-    // Sort by arrival time
-    allBuses.sort((a, b) => new Date(a.EstimatedArrival) - new Date(b.EstimatedArrival));
-    
-    // Display up to 10 nearest buses
-    const displayBuses = allBuses.slice(0, 10);
-    
-    if (displayBuses.length === 0) {
-        container.innerHTML = '<div style="color: #999;">No incoming buses</div>';
-        return;
-    }
-    
-    displayBuses.forEach(bus => {
-        const busElement = document.createElement('div');
-        busElement.className = 'bus-arrival';
-        busElement.dataset.estimatedArrival = bus.EstimatedArrival; // Store for smooth countdown
-        
-        const arrivalTime = calculateArrivalTime(bus.EstimatedArrival);
-        const loadColor = getLoadColor(bus.Load);
-        const loadText = getLoadText(bus.Load);
-        
-        busElement.innerHTML = `
-            <div class="bus-arrival-number" style="background: ${loadColor};">${bus.serviceNo}</div>
-            <div class="bus-arrival-info">
-                <div class="arrival-time">${arrivalTime}</div>
-                <div class="bus-load">${loadText}${bus.Feature === 'WAB' ? ' • ♿' : ''}</div>
-            </div>
+    sortedServices.forEach(service => {
+        const serviceRow = document.createElement('div');
+        serviceRow.className = 'service-row';
+
+        // Service number and operator
+        const serviceNumber = document.createElement('div');
+        serviceNumber.className = 'service-number';
+        serviceNumber.innerHTML = `
+            <span class="number">${service.ServiceNo}</span>
+            <span class="operator">${service.Operator}</span>
         `;
-        
-        container.appendChild(busElement);
+
+        // Arrival cards container
+        const arrivalCards = document.createElement('div');
+        arrivalCards.className = 'arrival-cards';
+
+        // Add cards for each bus (NextBus, NextBus2, NextBus3)
+        const buses = [service.NextBus, service.NextBus2, service.NextBus3].filter(bus => bus && bus.EstimatedArrival);
+
+        buses.forEach(bus => {
+            const card = createArrivalCard(bus);
+            arrivalCards.appendChild(card);
+        });
+
+        serviceRow.appendChild(serviceNumber);
+        serviceRow.appendChild(arrivalCards);
+        container.appendChild(serviceRow);
+    });
+}
+
+// Create an arrival card with status tag and bus icon
+function createArrivalCard(bus) {
+    const card = document.createElement('div');
+    card.className = 'arrival-card';
+    card.dataset.estimatedArrival = bus.EstimatedArrival;
+
+    const arrivalTime = calculateArrivalTime(bus.EstimatedArrival);
+    const load = bus.Load; // SEA, SDA, LSD
+    const busType = bus.Type; // SD (single deck), DD (double deck), BD (bendy)
+
+    // Determine status class for color
+    let statusClass = 'status-ok'; // Green for SEA
+    let statusText = ''; // No text for SEA
+
+    if (load === 'SDA') {
+        statusClass = 'status-standing'; // Orange
+        statusText = 'standing';
+    } else if (load === 'LSD') {
+        statusClass = 'status-crowded'; // Red
+        statusText = 'crowded';
+    }
+
+    // Create time group with optional status tag
+    const timeGroup = document.createElement('div');
+    timeGroup.className = 'arrival-time-group';
+
+    const arrivalText = document.createElement('span');
+    arrivalText.className = 'arrival-text';
+    arrivalText.textContent = arrivalTime;
+    timeGroup.appendChild(arrivalText);
+
+    // Add status tag only for SDA and LSD
+    if (statusText) {
+        const statusTag = document.createElement('span');
+        statusTag.className = `status-tag status-${load === 'SDA' ? 'standing' : 'crowded'}`;
+        statusTag.textContent = statusText;
+        timeGroup.appendChild(statusTag);
+    }
+
+    // Bus icon with proper SVG based on type
+    const busIcon = document.createElement('div');
+    busIcon.className = `bus-icon-placeholder ${statusClass}`;
+    busIcon.innerHTML = getBusIconSVG(busType);
+
+    card.appendChild(timeGroup);
+    card.appendChild(busIcon);
+
+    return card;
+}
+
+// Get bus icon SVG based on bus type (SD, DD, BD)
+function getBusIconSVG(busType) {
+    // Single Deck (SD) icon
+    if (busType === 'SD') {
+        return `
+<svg width="23" height="12" viewBox="0 0 23 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M2 0.25H20C21.5188 0.25 22.75 1.48122 22.75 3V7C22.75 8.51878 21.5188 9.75 20 9.75H3C1.48122 9.75 0.25 8.51878 0.25 7V2C0.25 1.0335 1.0335 0.25 2 0.25Z" fill="currentColor" stroke="black" stroke-width="0.5"/>
+<circle cx="5.5" cy="9.5" r="2.25" fill="white" stroke="black" stroke-width="0.5"/>
+<circle cx="17.5" cy="9.5" r="2.25" fill="white" stroke="black" stroke-width="0.5"/>
+<rect x="2" y="2" width="3" height="2" fill="white"/>
+<rect x="18" y="2" width="3" height="2" fill="white"/>
+<rect x="14" y="2" width="3" height="2" fill="white"/>
+<rect x="10" y="2" width="3" height="2" fill="white"/>
+<rect x="6" y="2" width="3" height="2" fill="white"/>
+</svg>
+        `;
+    }
+    // Double Deck (DD) icon - taller version
+    else if (busType === 'DD') {
+        return `
+<svg width="23" height="16" viewBox="0 0 23 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M2 0.25H20C21.5188 0.25 22.75 1.48122 22.75 3V11C22.75 12.5188 21.5188 13.75 20 13.75H3C1.48122 13.75 0.25 12.5188 0.25 11V2C0.25 1.0335 1.0335 0.25 2 0.25Z" fill="currentColor" stroke="black" stroke-width="0.5"/>
+<circle cx="5.5" cy="13.5" r="2.25" fill="white" stroke="black" stroke-width="0.5"/>
+<circle cx="17.5" cy="13.5" r="2.25" fill="white" stroke="black" stroke-width="0.5"/>
+<rect x="2" y="6" width="3" height="2" fill="white"/>
+<rect x="18" y="6" width="3" height="4" fill="white"/>
+<rect x="14" y="6" width="3" height="2" fill="white"/>
+<rect x="10" y="6" width="3" height="2" fill="white"/>
+<rect x="6" y="6" width="3" height="2" fill="white"/>
+<rect x="2" y="2" width="3" height="2" fill="white"/>
+<rect x="18" y="2" width="3" height="2" fill="white"/>
+<rect x="14" y="2" width="3" height="2" fill="white"/>
+<rect x="10" y="2" width="3" height="2" fill="white"/>
+<rect x="6" y="2" width="3" height="2" fill="white"/>
+</svg>
+
+        `;
+    }
+    // Bendy bus (BD) or default - use single deck
+    else {
+        return `
+<svg width="23" height="12" viewBox="0 0 23 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M2 0.25H20C21.5188 0.25 22.75 1.48122 22.75 3V7C22.75 8.51878 21.5188 9.75 20 9.75H3C1.48122 9.75 0.25 8.51878 0.25 7V2C0.25 1.0335 1.0335 0.25 2 0.25Z" fill="currentColor" stroke="black" stroke-width="0.5"/>
+<circle cx="5.5" cy="9.5" r="2.25" fill="white" stroke="black" stroke-width="0.5"/>
+<circle cx="17.5" cy="9.5" r="2.25" fill="white" stroke="black" stroke-width="0.5"/>
+<rect x="2" y="2" width="3" height="2" fill="white"/>
+<rect x="18" y="2" width="3" height="2" fill="white"/>
+<rect x="14" y="2" width="3" height="2" fill="white"/>
+<rect x="10" y="2" width="3" height="2" fill="white"/>
+<rect x="6" y="2" width="3" height="2" fill="white"/>
+</svg>
+
+        `;
+    }
+}
+
+// Update countdown timers smoothly (called every second)
+function updateBusCountdowns() {
+    const arrivalElements = document.querySelectorAll('.arrival-card');
+    arrivalElements.forEach(element => {
+        const estimatedArrival = element.dataset.estimatedArrival;
+        if (estimatedArrival) {
+            const timeElement = element.querySelector('.arrival-text');
+            if (timeElement) {
+                timeElement.textContent = calculateArrivalTime(estimatedArrival);
+            }
+        }
     });
 }
 
@@ -738,9 +789,9 @@ function calculateArrivalTime(estimatedArrival) {
     const arrival = new Date(estimatedArrival);
     const diffMs = arrival - now;
     const diffMins = Math.floor(diffMs / 60000); // Round down to nearest minute
-    
+
     if (diffMins < 1) {
-        return 'Arriving';
+        return 'Arr';
     } else if (diffMins === 1) {
         return '1 min';
     } else {
@@ -772,7 +823,7 @@ function getLoadText(load) {
 function hideBottomSheet() {
     bottomSheet.classList.remove('active');
     bottomSheet.style.transform = '';
-    
+
     // Clear all intervals
     if (refreshInterval) {
         clearInterval(refreshInterval);
@@ -782,7 +833,7 @@ function hideBottomSheet() {
         clearInterval(countdownInterval);
         countdownInterval = null;
     }
-    
+
     // Clear state
     currentBusStopCode = null;
     cachedBusData = null;
