@@ -10,6 +10,8 @@ services:
       - NODE_ENV=production
       - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
       - LTA_DATAMALL_API_KEY=${LTA_DATAMALL_API_KEY}
+      - LTA_DATAMALL_API_KEY_2=${LTA_DATAMALL_API_KEY_2}
+      - LTA_DATAMALL_API_KEY_3=${LTA_DATAMALL_API_KEY_3}
     restart: unless-stopped
     volumes:
       # Mount the saved-data directory for bus stops JSON
