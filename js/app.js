@@ -501,10 +501,15 @@ function createBusStopMarker(stop, size = 28, isActive = false) {
         title: `${stop.Description || 'Bus Stop'}\n${stop.RoadName || ''}\nStop: ${stop.BusStopCode || ''}`
     });
     
-    // Trigger fade-in animation after a brief delay
-    setTimeout(() => {
-        svgElement.classList.add('fade-in');
-    }, 10);
+    // Force reflow for iOS Safari - read a property to ensure DOM is ready
+    void svgElement.offsetWidth;
+    
+    // Use requestAnimationFrame for better iOS Safari compatibility
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            svgElement.classList.add('fade-in');
+        });
+    });
 
     // Store marker size and stop data for later updates
     marker.markerSize = size;

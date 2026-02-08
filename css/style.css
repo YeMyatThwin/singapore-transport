@@ -46,6 +46,12 @@ html, body {
 .bus-stop-marker {
     opacity: 0;
     transition: opacity 0.3s ease-in-out;
+    /* Hardware acceleration for iOS Safari */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: opacity;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
 }
 
 .bus-stop-marker.fade-in {
