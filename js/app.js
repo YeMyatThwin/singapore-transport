@@ -459,7 +459,7 @@ function getActiveBusStopSVG(stop, width) {
 function fadeOutAndRemoveMarker(marker) {
     const content = marker.content;
     if (content && content.classList) {
-        content.classList.remove('fade-in');
+        content.classList.remove('spring-in');
         content.classList.add('fade-out');
         // Wait for animation to complete before removing
         setTimeout(() => {
@@ -482,7 +482,7 @@ function updateMarkerIcon(marker, stop, size, isActive) {
     const svgElement = svgDoc.documentElement;
     
     // Add animation classes
-    svgElement.classList.add('bus-stop-marker', 'fade-in');
+    svgElement.classList.add('bus-stop-marker', 'spring-in');
     
     marker.content = svgElement;
 }
@@ -498,7 +498,7 @@ function createBusStopMarker(stop, size = 28, isActive = false) {
     const svgDoc = parser.parseFromString(svgIcon, 'image/svg+xml');
     const svgElement = svgDoc.documentElement;
     
-    // Add animation classes for fade-in effect
+    // Add animation classes for spring-in effect
     svgElement.classList.add('bus-stop-marker');
 
     const marker = new google.maps.marker.AdvancedMarkerElement({
@@ -514,7 +514,7 @@ function createBusStopMarker(stop, size = 28, isActive = false) {
     // Use requestAnimationFrame for better iOS Safari compatibility
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-            svgElement.classList.add('fade-in');
+            svgElement.classList.add('spring-in');
         });
     });
 
