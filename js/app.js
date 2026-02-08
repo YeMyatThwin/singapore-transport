@@ -246,45 +246,52 @@ function updateUserLocationMarker(position) {
     // Use device orientation heading if available, otherwise fallback to GPS heading
     const heading = deviceHeading !== null ? deviceHeading : position.coords.heading;
 
-    // Update or create the blue dot marker
-    if (userLocationMarker) {
-        userLocationMarker.setMap(null);
+    // Create marker on first call, update position on subsequent calls
+    if (!userLocationMarker) {
+        // First time - create new marker
+        const blueDot = document.createElement('div');
+        blueDot.className = 'blue-dot';
+
+        // Add direction wedge if heading is available
+        if (heading !== null && !isNaN(heading)) {
+            const wedge = document.createElement('div');
+            wedge.className = 'direction-wedge';
+            wedge.style.transform = `rotate(${heading}deg)`;
+            blueDot.appendChild(wedge);
+        }
+
+        userLocationMarker = new google.maps.marker.AdvancedMarkerElement({
+            position: pos,
+            map: map,
+            content: blueDot,
+            title: "Your Location"
+        });
+    } else {
+        // Update existing marker position smoothly
+        userLocationMarker.position = pos;
+        
+        // Update direction wedge if heading changed
+        updateDirectionWedge();
     }
-
-    // Create blue dot marker with direction indicator
-    const blueDot = document.createElement('div');
-    blueDot.className = 'blue-dot';
-
-    // Add direction wedge if heading is available
-    if (heading !== null && !isNaN(heading)) {
-        const wedge = document.createElement('div');
-        wedge.className = 'direction-wedge';
-        wedge.style.transform = `rotate(${heading}deg)`;
-        blueDot.appendChild(wedge);
-    }
-
-    userLocationMarker = new google.maps.marker.AdvancedMarkerElement({
-        position: pos,
-        map: map,
-        content: blueDot,
-        title: "Your Location"
-    });
 
     // Update or create accuracy circle
-    if (accuracyCircle) {
-        accuracyCircle.setMap(null);
+    if (!accuracyCircle) {
+        // First time - create new circle
+        accuracyCircle = new google.maps.Circle({
+            map: map,
+            center: pos,
+            radius: accuracy,
+            fillColor: '#4285F4',
+            fillOpacity: 0.1,
+            strokeColor: '#4285F4',
+            strokeOpacity: 0.3,
+            strokeWeight: 1,
+        });
+    } else {
+        // Update existing circle properties smoothly
+        accuracyCircle.setCenter(pos);
+        accuracyCircle.setRadius(accuracy);
     }
-
-    accuracyCircle = new google.maps.Circle({
-        map: map,
-        center: pos,
-        radius: accuracy,
-        fillColor: '#4285F4',
-        fillOpacity: 0.1,
-        strokeColor: '#4285F4',
-        strokeOpacity: 0.3,
-        strokeWeight: 1,
-    });
 }
 
 // Store bus stop markers - using Map for efficient lookup by BusStopCode
