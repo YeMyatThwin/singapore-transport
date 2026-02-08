@@ -42,6 +42,20 @@ html, body {
     background-color: #e8e8e8;
 }
 
+/* Bus stop marker animations */
+.bus-stop-marker {
+    opacity: 0;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.bus-stop-marker.fade-in {
+    opacity: 1;
+}
+
+.bus-stop-marker.fade-out {
+    opacity: 0;
+}
+
 /* Blue dot for user location */
 .blue-dot {
     width: 20px;

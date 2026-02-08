@@ -287,8 +287,8 @@ function updateUserLocationMarker(position) {
     });
 }
 
-// Store bus stop markers
-const busStopMarkers = [];
+// Store bus stop markers - using Map for efficient lookup by BusStopCode
+const busStopMarkers = new Map();
 
 // Load bus stops from local JSON file
 async function loadBusStopsFromJSON() {
@@ -330,13 +330,14 @@ function displayNearbyBusStops(allBusStops) {
 
     const zoomLevel = map.getZoom();
 
-    // Clear existing markers
-    busStopMarkers.forEach(marker => marker.setMap(null));
-    busStopMarkers.length = 0;
-
     // Don't show bus stops if zoomed out too far
     if (zoomLevel < 14) {
         console.log(`Zoom level ${zoomLevel} - bus stops hidden (need zoom >= 14)`);
+        // Fade out and remove all markers when zoomed out too far
+        busStopMarkers.forEach(marker => {
+            fadeOutAndRemoveMarker(marker);
+        });
+        busStopMarkers.clear();
         return;
     }
 
@@ -363,10 +364,35 @@ function displayNearbyBusStops(allBusStops) {
 
     console.log(`Zoom ${zoomLevel}: Found ${nearbyStops.length} bus stops within ${radiusKm}km`);
 
-    // Create markers for nearby stops, preserving active state
+    // Create a Set of bus stop codes that should be visible
+    const visibleStopCodes = new Set(nearbyStops.map(stop => stop.BusStopCode));
+
+    // Remove markers that are no longer in range with fade-out animation
+    busStopMarkers.forEach((marker, busStopCode) => {
+        if (!visibleStopCodes.has(busStopCode)) {
+            fadeOutAndRemoveMarker(marker);
+            busStopMarkers.delete(busStopCode);
+        }
+    });
+
+    // Add or update markers for nearby stops
     nearbyStops.forEach(stop => {
-        const isActive = activeBusStopCode === stop.BusStopCode;
-        createBusStopMarker(stop, iconSize, isActive);
+        const existingMarker = busStopMarkers.get(stop.BusStopCode);
+        
+        if (existingMarker) {
+            // Marker already exists - check if size changed (zoom level changed)
+            if (existingMarker.markerSize !== iconSize) {
+                // Update icon size for existing marker
+                const isActive = activeBusStopCode === stop.BusStopCode;
+                updateMarkerIcon(existingMarker, stop, iconSize, isActive);
+                existingMarker.markerSize = iconSize;
+            }
+            // Marker exists and size is correct - do nothing (no refresh)
+        } else {
+            // New marker - create it
+            const isActive = activeBusStopCode === stop.BusStopCode;
+            createBusStopMarker(stop, iconSize, isActive);
+        }
     });
 }
 
@@ -422,6 +448,21 @@ function getActiveBusStopSVG(stop, width) {
 </svg>`;
 }
 
+// Fade out marker and remove from map
+function fadeOutAndRemoveMarker(marker) {
+    const content = marker.content;
+    if (content && content.classList) {
+        content.classList.remove('fade-in');
+        content.classList.add('fade-out');
+        // Wait for animation to complete before removing
+        setTimeout(() => {
+            marker.setMap(null);
+        }, 300); // Match CSS transition duration
+    } else {
+        marker.setMap(null);
+    }
+}
+
 // Update marker icon to normal or active state
 function updateMarkerIcon(marker, stop, size, isActive) {
     const width = Math.round(size * 220 / 401);
@@ -432,6 +473,9 @@ function updateMarkerIcon(marker, stop, size, isActive) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
     const svgElement = svgDoc.documentElement;
+    
+    // Add animation classes
+    svgElement.classList.add('bus-stop-marker', 'fade-in');
     
     marker.content = svgElement;
 }
@@ -446,6 +490,9 @@ function createBusStopMarker(stop, size = 28, isActive = false) {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgIcon, 'image/svg+xml');
     const svgElement = svgDoc.documentElement;
+    
+    // Add animation classes for fade-in effect
+    svgElement.classList.add('bus-stop-marker');
 
     const marker = new google.maps.marker.AdvancedMarkerElement({
         position: { lat: stop.Latitude, lng: stop.Longitude },
@@ -453,6 +500,11 @@ function createBusStopMarker(stop, size = 28, isActive = false) {
         content: svgElement,
         title: `${stop.Description || 'Bus Stop'}\n${stop.RoadName || ''}\nStop: ${stop.BusStopCode || ''}`
     });
+    
+    // Trigger fade-in animation after a brief delay
+    setTimeout(() => {
+        svgElement.classList.add('fade-in');
+    }, 10);
 
     // Store marker size and stop data for later updates
     marker.markerSize = size;
@@ -479,7 +531,8 @@ function createBusStopMarker(stop, size = 28, isActive = false) {
         showBottomSheet(stop);
     });
 
-    busStopMarkers.push(marker);
+    // Store marker in Map keyed by BusStopCode
+    busStopMarkers.set(stop.BusStopCode, marker);
 }
 
 // Initialize bottom sheet functionality
