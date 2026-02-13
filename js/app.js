@@ -237,6 +237,42 @@ function startLocationTracking() {
     );
 }
 
+// Function to smoothly animate marker position and accuracy circle
+function animateMarkerTo(marker, targetPos, targetAccuracy, duration = 1000) {
+    const startPos = marker.position;
+    const startAccuracy = accuracyCircle ? accuracyCircle.getRadius() : targetAccuracy;
+    const startTime = performance.now();
+    
+    function animate(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Easing function for smoother animation (ease-out)
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        
+        // Interpolate between start and target position
+        const lat = startPos.lat + (targetPos.lat - startPos.lat) * easeProgress;
+        const lng = startPos.lng + (targetPos.lng - startPos.lng) * easeProgress;
+        
+        marker.position = { lat, lng };
+        
+        // Update accuracy circle if it exists
+        if (accuracyCircle) {
+            accuracyCircle.setCenter({ lat, lng });
+            // Also animate the radius
+            const radius = startAccuracy + (targetAccuracy - startAccuracy) * easeProgress;
+            accuracyCircle.setRadius(radius);
+        }
+        
+        // Continue animation if not complete
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        }
+    }
+    
+    requestAnimationFrame(animate);
+}
+
 function updateUserLocationMarker(position) {
     const pos = {
         lat: position.coords.latitude,
@@ -266,9 +302,23 @@ function updateUserLocationMarker(position) {
             content: blueDot,
             title: "Your Location"
         });
+
+        // Add click listener to blue dot for orientation permission (iOS)
+        userLocationMarker.addListener('click', () => {
+            console.log("Blue dot clicked");
+            // If orientation is not active yet, request permission
+            if (deviceHeading === null) {
+                console.log("Requesting orientation permission from blue dot click");
+                requestOrientationPermission();
+            } else {
+                // If already have orientation, just recenter map
+                map.setCenter(userLocationMarker.position);
+                map.setZoom(15);
+            }
+        });
     } else {
-        // Update existing marker position smoothly
-        userLocationMarker.position = pos;
+        // Animate marker to new position smoothly
+        animateMarkerTo(userLocationMarker, pos, accuracy);
         
         // Update direction wedge if heading changed
         updateDirectionWedge();
@@ -288,9 +338,7 @@ function updateUserLocationMarker(position) {
             strokeWeight: 1,
         });
     } else {
-        // Update existing circle properties smoothly
-        accuracyCircle.setCenter(pos);
-        accuracyCircle.setRadius(accuracy);
+        // Radius is updated by animation, no need to set it here
     }
 }
 
