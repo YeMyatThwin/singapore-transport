@@ -45,6 +45,50 @@ A mobile-first web application for real-time location tracking with compass dire
    - Opens at `http://localhost:3000`
    - Uses nodemon for auto-restart during development
 
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```env
+# Google Maps API Key
+GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+
+# LTA DataMall API Keys (for Singapore bus data)
+# Primary key
+LTA_DATAMALL_API_KEY=your_primary_lta_key
+
+# Backup keys (optional, for redundancy)
+LTA_DATAMALL_API_KEY_2=your_backup_lta_key_1
+LTA_DATAMALL_API_KEY_3=your_backup_lta_key_2
+```
+
+### Multiple LTA API Keys
+
+The application supports **multiple LTA DataMall API keys** for redundancy:
+
+- **Primary Key**: Uses `LTA_DATAMALL_API_KEY`
+- **Backup Keys**: Can add unlimited backup keys using `LTA_DATAMALL_API_KEY_2`, `LTA_DATAMALL_API_KEY_3`, etc.
+- **Auto-fallback**: If the current key fails with HTTP 401 (unauthorized) or 429 (rate limited), the app automatically switches to the next available key
+- **Use Case**: Prevents service interruption if a key is banned, revoked, reaches daily limits, or experiences issues
+
+The server logs which key failed and which one it's switching to:
+```
+LTA API key #1 failed (401), retrying with next key
+```
+
+#### Setup for Docker
+
+If using Docker, update `docker-compose.yml` to include all backup keys:
+
+```yaml
+environment:
+  - LTA_DATAMALL_API_KEY=${LTA_DATAMALL_API_KEY}
+  - LTA_DATAMALL_API_KEY_2=${LTA_DATAMALL_API_KEY_2}
+  - LTA_DATAMALL_API_KEY_3=${LTA_DATAMALL_API_KEY_3}
+```
+
 ## Usage
 
 ### For Testing

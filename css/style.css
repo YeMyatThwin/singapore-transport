@@ -42,6 +42,55 @@ html, body {
     background-color: #e8e8e8;
 }
 
+/* Bus stop marker animations */
+.bus-stop-marker {
+    opacity: 0;
+    transform: scale(0);
+    /* Hardware acceleration for iOS Safari */
+    -webkit-transform: translateZ(0) scale(0);
+    will-change: transform, opacity;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+.bus-stop-marker.spring-in {
+    animation: marker-spring 0.5s ease-out forwards;
+}
+
+.bus-stop-marker.fade-out {
+    animation: marker-fade-out 0.3s ease-in-out forwards;
+}
+
+/* Spring animation keyframes */
+@keyframes marker-spring {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    70% {
+        transform: scale(0.9);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes marker-fade-out {
+    from {
+        transform: scale(1);
+        opacity: 1;
+    }
+    to {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+}
+
 /* Blue dot for user location */
 .blue-dot {
     width: 20px;

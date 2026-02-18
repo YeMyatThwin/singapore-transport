@@ -11,6 +11,8 @@ let countdownInterval = null; // Store countdown animation interval
 let lastUpdateTime = null; // Store last successful update time
 let cachedBusData = null; // Store last known bus data
 let isOpening = false; // Flag to prevent click-outside from closing when opening
+let activeMarker = null; // Store currently active/selected bus stop marker
+let activeBusStopCode = null; // Store the bus stop code of the active marker
 
 function initMap() {
     // The map
@@ -21,7 +23,7 @@ function initMap() {
         zoomControl: true,
         mapTypeControl: false,
         streetViewControl: false,
-        colorScheme: google.maps.ColorScheme.DARK, // Set the map to dark mode
+        colorScheme: google.maps.ColorScheme.LIGHT, // Set the map to dark mode
 
     });
 
@@ -235,6 +237,42 @@ function startLocationTracking() {
     );
 }
 
+// Function to smoothly animate marker position and accuracy circle
+function animateMarkerTo(marker, targetPos, targetAccuracy, duration = 1000) {
+    const startPos = marker.position;
+    const startAccuracy = accuracyCircle ? accuracyCircle.getRadius() : targetAccuracy;
+    const startTime = performance.now();
+    
+    function animate(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Easing function for smoother animation (ease-out)
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        
+        // Interpolate between start and target position
+        const lat = startPos.lat + (targetPos.lat - startPos.lat) * easeProgress;
+        const lng = startPos.lng + (targetPos.lng - startPos.lng) * easeProgress;
+        
+        marker.position = { lat, lng };
+        
+        // Update accuracy circle if it exists
+        if (accuracyCircle) {
+            accuracyCircle.setCenter({ lat, lng });
+            // Also animate the radius
+            const radius = startAccuracy + (targetAccuracy - startAccuracy) * easeProgress;
+            accuracyCircle.setRadius(radius);
+        }
+        
+        // Continue animation if not complete
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        }
+    }
+    
+    requestAnimationFrame(animate);
+}
+
 function updateUserLocationMarker(position) {
     const pos = {
         lat: position.coords.latitude,
@@ -244,49 +282,68 @@ function updateUserLocationMarker(position) {
     // Use device orientation heading if available, otherwise fallback to GPS heading
     const heading = deviceHeading !== null ? deviceHeading : position.coords.heading;
 
-    // Update or create the blue dot marker
-    if (userLocationMarker) {
-        userLocationMarker.setMap(null);
+    // Create marker on first call, update position on subsequent calls
+    if (!userLocationMarker) {
+        // First time - create new marker
+        const blueDot = document.createElement('div');
+        blueDot.className = 'blue-dot';
+
+        // Add direction wedge if heading is available
+        if (heading !== null && !isNaN(heading)) {
+            const wedge = document.createElement('div');
+            wedge.className = 'direction-wedge';
+            wedge.style.transform = `rotate(${heading}deg)`;
+            blueDot.appendChild(wedge);
+        }
+
+        userLocationMarker = new google.maps.marker.AdvancedMarkerElement({
+            position: pos,
+            map: map,
+            content: blueDot,
+            title: "Your Location"
+        });
+
+        // Add click listener to blue dot for orientation permission (iOS)
+        userLocationMarker.addListener('click', () => {
+            console.log("Blue dot clicked");
+            // If orientation is not active yet, request permission
+            if (deviceHeading === null) {
+                console.log("Requesting orientation permission from blue dot click");
+                requestOrientationPermission();
+            } else {
+                // If already have orientation, just recenter map
+                map.setCenter(userLocationMarker.position);
+                map.setZoom(15);
+            }
+        });
+    } else {
+        // Animate marker to new position smoothly
+        animateMarkerTo(userLocationMarker, pos, accuracy);
+        
+        // Update direction wedge if heading changed
+        updateDirectionWedge();
     }
-
-    // Create blue dot marker with direction indicator
-    const blueDot = document.createElement('div');
-    blueDot.className = 'blue-dot';
-
-    // Add direction wedge if heading is available
-    if (heading !== null && !isNaN(heading)) {
-        const wedge = document.createElement('div');
-        wedge.className = 'direction-wedge';
-        wedge.style.transform = `rotate(${heading}deg)`;
-        blueDot.appendChild(wedge);
-    }
-
-    userLocationMarker = new google.maps.marker.AdvancedMarkerElement({
-        position: pos,
-        map: map,
-        content: blueDot,
-        title: "Your Location"
-    });
 
     // Update or create accuracy circle
-    if (accuracyCircle) {
-        accuracyCircle.setMap(null);
+    if (!accuracyCircle) {
+        // First time - create new circle
+        accuracyCircle = new google.maps.Circle({
+            map: map,
+            center: pos,
+            radius: accuracy,
+            fillColor: '#4285F4',
+            fillOpacity: 0.1,
+            strokeColor: '#4285F4',
+            strokeOpacity: 0.3,
+            strokeWeight: 1,
+        });
+    } else {
+        // Radius is updated by animation, no need to set it here
     }
-
-    accuracyCircle = new google.maps.Circle({
-        map: map,
-        center: pos,
-        radius: accuracy,
-        fillColor: '#4285F4',
-        fillOpacity: 0.1,
-        strokeColor: '#4285F4',
-        strokeOpacity: 0.3,
-        strokeWeight: 1,
-    });
 }
 
-// Store bus stop markers
-const busStopMarkers = [];
+// Store bus stop markers - using Map for efficient lookup by BusStopCode
+const busStopMarkers = new Map();
 
 // Load bus stops from local JSON file
 async function loadBusStopsFromJSON() {
@@ -328,13 +385,14 @@ function displayNearbyBusStops(allBusStops) {
 
     const zoomLevel = map.getZoom();
 
-    // Clear existing markers
-    busStopMarkers.forEach(marker => marker.setMap(null));
-    busStopMarkers.length = 0;
-
     // Don't show bus stops if zoomed out too far
     if (zoomLevel < 14) {
         console.log(`Zoom level ${zoomLevel} - bus stops hidden (need zoom >= 14)`);
+        // Fade out and remove all markers when zoomed out too far
+        busStopMarkers.forEach(marker => {
+            fadeOutAndRemoveMarker(marker);
+        });
+        busStopMarkers.clear();
         return;
     }
 
@@ -342,10 +400,10 @@ function displayNearbyBusStops(allBusStops) {
     let radiusKm, iconSize;
     if (zoomLevel >= 16) {
         radiusKm = 1; // Close up - less stops
-        iconSize = 40; // Bigger icons
+        iconSize = 50; // Bigger icons
     } else {
         radiusKm = 2; // Wider view - more stops
-        iconSize = 20; // Smaller icons
+        iconSize = 30; // Smaller icons
     }
 
     // Filter nearby stops based on map center
@@ -361,9 +419,35 @@ function displayNearbyBusStops(allBusStops) {
 
     console.log(`Zoom ${zoomLevel}: Found ${nearbyStops.length} bus stops within ${radiusKm}km`);
 
-    // Create markers for nearby stops
+    // Create a Set of bus stop codes that should be visible
+    const visibleStopCodes = new Set(nearbyStops.map(stop => stop.BusStopCode));
+
+    // Remove markers that are no longer in range with fade-out animation
+    busStopMarkers.forEach((marker, busStopCode) => {
+        if (!visibleStopCodes.has(busStopCode)) {
+            fadeOutAndRemoveMarker(marker);
+            busStopMarkers.delete(busStopCode);
+        }
+    });
+
+    // Add or update markers for nearby stops
     nearbyStops.forEach(stop => {
-        createBusStopMarker(stop, iconSize);
+        const existingMarker = busStopMarkers.get(stop.BusStopCode);
+        
+        if (existingMarker) {
+            // Marker already exists - check if size changed (zoom level changed)
+            if (existingMarker.markerSize !== iconSize) {
+                // Update icon size for existing marker
+                const isActive = activeBusStopCode === stop.BusStopCode;
+                updateMarkerIcon(existingMarker, stop, iconSize, isActive);
+                existingMarker.markerSize = iconSize;
+            }
+            // Marker exists and size is correct - do nothing (no refresh)
+        } else {
+            // New marker - create it
+            const isActive = activeBusStopCode === stop.BusStopCode;
+            createBusStopMarker(stop, iconSize, isActive);
+        }
     });
 }
 
@@ -383,22 +467,87 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * c; // Distance in meters
 }
 
-// Create bus stop marker on map
-function createBusStopMarker(stop, size = 28) {
-    const svgIcon = `
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Uploaded to: SVG Repo, www.svgrepo.com, Transformed by: SVG Repo Mixer Tools -->
-<svg fill="#ffffff" height="${size}px" width="${size}px" version="1.1" id="Capa_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="-39.5 -39.5 474.00 474.00" xml:space="preserve" stroke="#ffffff" transform="matrix(-1, 0, 0, 1, 0, 0)rotate(0)">
-<g id="SVGRepo_bgCarrier" stroke-width="0">
-<rect x="-39.5" y="-39.5" width="474.00" height="474.00" rx="66.36" fill="#000000" strokewidth="0"/>
+// Generate normal (inactive) bus stop icon SVG
+function getNormalBusStopSVG(stop, width, height) {
+    return `
+<svg width="${width}" height="${height}" viewBox="0 0 220 401" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="81" y="100" width="58" height="301" rx="15" fill="url(#paint0_linear_${stop.BusStopCode})"/>
+<g clip-path="url(#clip0_${stop.BusStopCode})">
+<path d="M220 157.152H0V251.464H220V157.152Z" fill="#004B50"/>
+<path d="M220 0H0V157.156H220V0Z" fill="#007F95"/>
+<path d="M159.408 34.5029C157.418 25.6029 149.268 20.0029 140.148 20.0029H79.8582C70.7382 20.0029 62.5882 25.6029 60.5982 34.5029C55.6082 56.8829 51.8582 92.2729 52.4182 115.523C52.5882 122.383 58.3782 127.463 65.2382 127.463H65.3682V137.033C65.3682 139.953 67.8482 142.303 70.7682 142.303H75.1982C78.2482 142.303 80.6182 139.953 80.6182 137.033V127.463H139.388V137.033C139.388 139.953 141.868 142.303 144.788 142.303H149.218C152.268 142.303 154.638 139.953 154.638 137.033V127.463H154.768C161.638 127.463 167.428 122.383 167.588 115.523C168.148 92.2629 164.398 56.8829 159.408 34.5029ZM90.5082 28.0029C90.5082 26.3429 91.8482 25.0029 93.5082 25.0029H126.508C128.158 25.0029 129.508 26.3429 129.508 28.0029V32.0029C129.508 33.6529 128.158 35.0029 126.508 35.0029H93.5082C91.8482 35.0029 90.5082 33.6529 90.5082 32.0029V28.0029ZM65.5682 76.0829L70.1882 46.0829C70.6382 43.1629 73.1582 41.0029 76.1182 41.0029H143.888C146.858 41.0029 149.368 43.1629 149.818 46.0829L154.438 76.0829C154.998 79.7229 152.188 83.0029 148.508 83.0029H71.4982C67.8182 83.0029 65.0082 79.7229 65.5682 76.0829ZM88.6682 105.833C88.6682 108.883 86.3182 111.253 83.2682 111.253H70.6382C67.7182 111.253 65.3682 108.883 65.3682 105.833V101.403C65.3682 98.4829 67.7182 96.0029 70.6382 96.0029H83.2682C86.3182 96.0029 88.6682 98.4829 88.6682 101.403V105.833ZM154.638 105.833C154.638 108.883 152.288 111.253 149.238 111.253H136.608C133.688 111.253 131.338 108.883 131.338 105.833V101.403C131.338 98.4829 133.688 96.0029 136.608 96.0029H149.238C152.288 96.0029 154.638 98.4829 154.638 101.403V105.833Z" fill="white"/>
+<path d="M50.115 228V172.727H71.2741C75.2684 172.727 78.588 173.357 81.2329 174.616C83.8958 175.858 85.8839 177.558 87.1974 179.717C88.5288 181.876 89.1945 184.323 89.1945 187.058C89.1945 189.307 88.7627 191.232 87.8991 192.834C87.0354 194.417 85.8749 195.704 84.4175 196.693C82.9602 197.683 81.3318 198.393 79.5326 198.825V199.365C81.4938 199.473 83.374 200.076 85.1732 201.173C86.9905 202.253 88.4748 203.782 89.6264 205.761C90.7779 207.741 91.3536 210.134 91.3536 212.94C91.3536 215.801 90.6609 218.374 89.2755 220.659C87.8901 222.926 85.803 224.716 83.0141 226.03C80.2253 227.343 76.7168 228 72.4886 228H50.115ZM60.1278 219.634H70.8962C74.5307 219.634 77.1486 218.941 78.7499 217.555C80.3693 216.152 81.1789 214.353 81.1789 212.158C81.1789 210.52 80.7741 209.045 79.9644 207.732C79.1548 206.4 78.0032 205.357 76.5099 204.601C75.0165 203.827 73.2353 203.44 71.1661 203.44H60.1278V219.634ZM60.1278 196.234H70.0326C71.7599 196.234 73.3162 195.92 74.7016 195.29C76.0871 194.642 77.1756 193.733 77.9673 192.564C78.7769 191.376 79.1818 189.973 79.1818 188.354C79.1818 186.213 78.4261 184.449 76.9147 183.064C75.4213 181.679 73.1993 180.986 70.2485 180.986H60.1278V196.234ZM122.254 210.565V186.545H132.024V228H122.551V220.632H122.119C121.184 222.953 119.645 224.851 117.504 226.327C115.381 227.802 112.763 228.54 109.651 228.54C106.934 228.54 104.532 227.937 102.445 226.732C100.375 225.508 98.7562 223.736 97.5866 221.415C96.4171 219.076 95.8324 216.251 95.8324 212.94V186.545H105.602V211.429C105.602 214.056 106.322 216.143 107.761 217.69C109.201 219.238 111.09 220.011 113.429 220.011C114.868 220.011 116.263 219.661 117.612 218.959C118.962 218.257 120.068 217.214 120.932 215.828C121.813 214.425 122.254 212.67 122.254 210.565ZM171.035 197.503L162.129 198.474C161.877 197.575 161.436 196.729 160.806 195.938C160.194 195.146 159.367 194.507 158.323 194.021C157.28 193.536 156.002 193.293 154.491 193.293C152.458 193.293 150.748 193.733 149.363 194.615C147.996 195.497 147.321 196.639 147.339 198.043C147.321 199.248 147.762 200.229 148.661 200.984C149.579 201.74 151.09 202.361 153.195 202.847L160.266 204.358C164.189 205.204 167.104 206.544 169.011 208.379C170.936 210.214 171.908 212.616 171.926 215.585C171.908 218.194 171.143 220.497 169.631 222.494C168.138 224.473 166.06 226.021 163.397 227.136C160.734 228.252 157.676 228.81 154.221 228.81C149.147 228.81 145.063 227.748 141.968 225.625C138.873 223.484 137.029 220.506 136.435 216.692L145.962 215.774C146.394 217.645 147.312 219.058 148.715 220.011C150.119 220.965 151.945 221.442 154.194 221.442C156.515 221.442 158.377 220.965 159.781 220.011C161.202 219.058 161.913 217.879 161.913 216.476C161.913 215.288 161.454 214.308 160.536 213.534C159.637 212.76 158.233 212.167 156.326 211.753L149.255 210.268C145.279 209.441 142.337 208.046 140.43 206.085C138.523 204.106 137.578 201.605 137.596 198.582C137.578 196.027 138.271 193.814 139.674 191.943C141.095 190.054 143.066 188.597 145.585 187.571C148.122 186.527 151.045 186.006 154.356 186.006C159.214 186.006 163.037 187.04 165.826 189.109C168.633 191.179 170.369 193.976 171.035 197.503Z" fill="white"/>
 </g>
-<g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round" stroke="#CCCCCC" stroke-width="3.16"/>
-<g id="SVGRepo_iconCarrier"> <g> <path d="M322.082,139.838h-12.395c-3.145,0-5.693,2.55-5.693,5.694v13.845c-1.627-12.684-3.402-26.597-4.619-36.319 C296.782,104.152,287.384,75,197.501,75c-89.886,0-99.471,29.156-102.066,48.059c-1.478,11.8-2.953,23.6-4.43,35.4v-12.926 c0-3.145-2.549-5.694-5.693-5.694H72.918c-3.143,0-5.693,2.55-5.693,5.694v31.319c0,3.145,2.551,5.694,5.693,5.694h12.395 c1.006,0,1.949-0.263,2.77-0.721c-0.37,2.958-0.74,5.915-1.11,8.873v77.735c-1.989,1.507-3.28,3.887-3.28,6.571v11.882 c0,4.55,3.696,8.247,8.247,8.247h17.183v14.34c0,5.805,4.723,10.527,10.527,10.527h17.676c5.805,0,10.527-4.723,10.527-10.527 v-14.34h99.293v14.34c0,5.805,4.723,10.527,10.527,10.527h17.676c5.807,0,10.531-4.723,10.531-10.527v-14.34h17.184 c4.55,0,8.246-3.697,8.246-8.247v-11.882c0-2.685-1.293-5.066-3.282-6.572v-77.733c0,0-0.445-3.444-1.148-8.898 c0.829,0.472,1.787,0.746,2.81,0.746h12.395c3.143,0,5.693-2.55,5.693-5.694v-31.319 C327.775,142.388,325.225,139.838,322.082,139.838z M161.602,95.499h71.789c2.967,0,5.36,2.403,5.36,5.364 c0,2.957-2.394,5.359-5.36,5.359h-71.789c-2.96,0-5.354-2.402-5.354-5.359C156.248,97.902,158.642,95.499,161.602,95.499z M142.798,254.449c-9.156,0-16.571-7.423-16.571-16.572c0-9.158,7.415-16.575,16.571-16.575c9.154,0,16.57,7.417,16.57,16.575 C159.368,247.026,151.952,254.449,142.798,254.449z M252.203,254.449c-9.158,0-16.573-7.423-16.573-16.572 c0-9.158,7.415-16.575,16.573-16.575c9.148,0,16.571,7.417,16.571,16.575C268.774,247.026,261.352,254.449,252.203,254.449z M268.423,182.545c-36.563,0-105.282-0.002-141.844,0.001c-4.691,0-8.27-3.686-7.984-8.243c0.884-14.199,1.773-28.396,2.664-42.596 c0.281-4.556,4.098-8.25,8.511-8.25c34.431,0,101.026,0,135.459,0c4.413,0,8.229,3.694,8.514,8.25 c0.886,14.199,1.772,28.396,2.655,42.596C276.688,178.859,273.11,182.545,268.423,182.545z"/> <path d="M313.002,0H82C36.785,0,0,36.784,0,81.998v230.993C0,358.211,36.785,395,82,395h231.002 C358.216,395,395,358.211,395,312.991V81.998C395,36.784,358.216,0,313.002,0z M380,312.991C380,349.94,349.944,380,313.002,380H82 c-36.944,0-67-30.06-67-67.009V81.998C15,45.055,45.056,15,82,15h231.002C349.944,15,380,45.055,380,81.998V312.991z"/> </g> </g>
+<defs>
+<linearGradient id="paint0_linear_${stop.BusStopCode}" x1="81" y1="250.5" x2="139" y2="250.5" gradientUnits="userSpaceOnUse">
+<stop stop-color="#CAD7FF"/>
+<stop offset="1" stop-color="#3350A8"/>
+</linearGradient>
+<clipPath id="clip0_${stop.BusStopCode}">
+<rect width="220" height="251.468" rx="40" fill="white"/>
+</clipPath>
+</defs>
 </svg>`;
+}
+
+// Generate active (selected) bus stop icon SVG
+function getActiveBusStopSVG(stop, width) {
+    const biggerWidth = width + 20; // Active icon is bigger
+    // Active icon has 220:279 ratio, calculate height based on bigger width
+    const height = Math.round(biggerWidth * 279 / 220);
+    return `
+<svg width="${biggerWidth}" height="${height}" viewBox="0 0 220 279" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M110.002 0.550781C170.452 0.550996 219.452 49.3136 219.449 109.456C219.449 136.307 209.64 160.849 193.448 179.836L110.001 277.634L26.5518 179.839H26.5508C10.3598 160.849 0.550781 136.31 0.550781 109.459C0.550827 49.3133 49.5515 0.550781 110.002 0.550781Z" fill="#007F95" stroke="#007F95" stroke-width="1.10116"/>
+<ellipse cx="109.555" cy="105.711" rx="90.7423" ry="90.2948" fill="white"/>
+<path d="M163.829 54.5073C161.627 44.707 152.608 38.5405 142.516 38.5405H75.7979C65.7056 38.5405 56.6867 44.707 54.4845 54.5073C48.9625 79.1512 44.8127 118.121 45.4324 143.723C45.6206 151.277 52.0279 156.871 59.6192 156.871H59.7631V167.409C59.7631 170.624 62.5075 173.212 65.7388 173.212H70.6411C74.0163 173.212 76.639 170.624 76.639 167.409V156.871H141.675V167.409C141.675 170.624 144.419 173.212 147.65 173.212H152.553C155.928 173.212 158.551 170.624 158.551 167.409V156.871H158.694C166.297 156.871 172.704 151.277 172.881 143.723C173.501 118.11 169.351 79.1512 163.829 54.5073ZM87.5834 47.3498C87.5834 45.5219 89.0662 44.0463 90.9032 44.0463H127.421C129.247 44.0463 130.741 45.5219 130.741 47.3498V51.7544C130.741 53.5713 129.247 55.0579 127.421 55.0579H90.9032C89.0662 55.0579 87.5834 53.5713 87.5834 51.7544V47.3498ZM59.9844 100.293L65.097 67.2587C65.595 64.0433 68.3836 61.6648 71.6592 61.6648H146.654C149.941 61.6648 152.719 64.0433 153.217 67.2587L158.329 100.293C158.949 104.302 155.839 107.913 151.767 107.913H66.5466C62.4743 107.913 59.3647 104.302 59.9844 100.293ZM85.5472 133.053C85.5472 136.411 82.9467 139.021 79.5715 139.021H65.5949C62.3636 139.021 59.7631 136.411 59.7631 133.053V128.175C59.7631 124.959 62.3636 122.228 65.5949 122.228H79.5715C82.9467 122.228 85.5472 124.959 85.5472 128.175V133.053ZM158.551 133.053C158.551 136.411 155.95 139.021 152.575 139.021H138.598C135.367 139.021 132.766 136.411 132.766 133.053V128.175C132.766 124.959 135.367 122.228 138.598 122.228H152.575C155.95 122.228 158.551 124.959 158.551 128.175V133.053Z" fill="#007F95" stroke="white" stroke-width="1.00205"/>
+</svg>`;
+}
+
+// Fade out marker and remove from map
+function fadeOutAndRemoveMarker(marker) {
+    const content = marker.content;
+    if (content && content.classList) {
+        content.classList.remove('spring-in');
+        content.classList.add('fade-out');
+        // Wait for animation to complete before removing
+        setTimeout(() => {
+            marker.setMap(null);
+        }, 300); // Match CSS transition duration
+    } else {
+        marker.setMap(null);
+    }
+}
+
+// Update marker icon to normal or active state
+function updateMarkerIcon(marker, stop, size, isActive) {
+    const width = Math.round(size * 220 / 401);
+    const svgString = isActive 
+        ? getActiveBusStopSVG(stop, width)
+        : getNormalBusStopSVG(stop, width, size);
+    
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svgString, 'image/svg+xml');
+    const svgElement = svgDoc.documentElement;
+    
+    // Add animation classes
+    svgElement.classList.add('bus-stop-marker', 'spring-in');
+    
+    marker.content = svgElement;
+}
+
+// Create bus stop marker on map
+function createBusStopMarker(stop, size = 28, isActive = false) {
+    const width = Math.round(size * 220 / 401);
+    const svgIcon = isActive 
+        ? getActiveBusStopSVG(stop, width)
+        : getNormalBusStopSVG(stop, width, size);
 
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgIcon, 'image/svg+xml');
     const svgElement = svgDoc.documentElement;
+    
+    // Add animation classes for spring-in effect
+    svgElement.classList.add('bus-stop-marker');
 
     const marker = new google.maps.marker.AdvancedMarkerElement({
         position: { lat: stop.Latitude, lng: stop.Longitude },
@@ -406,13 +555,44 @@ function createBusStopMarker(stop, size = 28) {
         content: svgElement,
         title: `${stop.Description || 'Bus Stop'}\n${stop.RoadName || ''}\nStop: ${stop.BusStopCode || ''}`
     });
+    
+    // Force reflow for iOS Safari - read a property to ensure DOM is ready
+    void svgElement.offsetWidth;
+    
+    // Use requestAnimationFrame for better iOS Safari compatibility
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            svgElement.classList.add('spring-in');
+        });
+    });
 
-    // Add click listener to show bottom sheet
+    // Store marker size and stop data for later updates
+    marker.markerSize = size;
+    marker.stopData = stop;
+
+    // If this marker should be active, store it as the active marker
+    if (isActive) {
+        activeMarker = marker;
+    }
+
+    // Add click listener to show bottom sheet and update icon
     marker.addListener('click', () => {
+        // Reset previous active marker to normal state
+        if (activeMarker && activeMarker !== marker) {
+            updateMarkerIcon(activeMarker, activeMarker.stopData, activeMarker.markerSize, false);
+        }
+        
+        // Set this marker as active
+        activeMarker = marker;
+        activeBusStopCode = stop.BusStopCode;
+        updateMarkerIcon(marker, stop, size, true);
+        
+        // Show bottom sheet
         showBottomSheet(stop);
     });
 
-    busStopMarkers.push(marker);
+    // Store marker in Map keyed by BusStopCode
+    busStopMarkers.set(stop.BusStopCode, marker);
 }
 
 // Initialize bottom sheet functionality
@@ -823,6 +1003,13 @@ function getLoadText(load) {
 function hideBottomSheet() {
     bottomSheet.classList.remove('active');
     bottomSheet.style.transform = '';
+
+    // Reset active marker to normal state
+    if (activeMarker) {
+        updateMarkerIcon(activeMarker, activeMarker.stopData, activeMarker.markerSize, false);
+        activeMarker = null;
+    }
+    activeBusStopCode = null;
 
     // Clear all intervals
     if (refreshInterval) {
