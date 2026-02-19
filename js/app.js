@@ -14,6 +14,16 @@ let isOpening = false; // Flag to prevent click-outside from closing when openin
 let activeMarker = null; // Store currently active/selected bus stop marker
 let activeBusStopCode = null; // Store the bus stop code of the active marker
 
+// Weather System Variables
+let weatherMarkers = []; // Store weather markers
+let weatherOverlays = []; // Store weather animation overlays
+let weatherData = null; // Store current weather data
+let weatherRefreshInterval = null; // Weather refresh interval
+let currentZoomLevel = 15; // Track current zoom level
+const ZOOM_THRESHOLD = 12; // Zoom level threshold for animations
+let userWeatherBadge = null; // Weather badge for user's location
+let currentUserArea = null; // Current planning area user is in
+
 function initMap() {
     // The map
     map = new google.maps.Map(document.getElementById("map"), {
@@ -61,6 +71,9 @@ function initMap() {
 
         // Load bus stops from local JSON file
         loadBusStopsFromJSON();
+
+        // Initialize weather system
+        initWeatherSystem();
 
         // Check if iOS and show compass prompt
         if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -271,6 +284,9 @@ function animateMarkerTo(marker, targetPos, targetAccuracy, duration = 1000) {
     }
     
     requestAnimationFrame(animate);
+    
+    // Update weather for new location
+    updateUserLocationWeather(targetPos);
 }
 
 function updateUserLocationMarker(position) {
@@ -295,6 +311,12 @@ function updateUserLocationMarker(position) {
             wedge.style.transform = `rotate(${heading}deg)`;
             blueDot.appendChild(wedge);
         }
+
+        // Create weather badge container (will be populated when weather loads)
+        const weatherBadge = document.createElement('div');
+        weatherBadge.className = 'user-weather-badge';
+        blueDot.appendChild(weatherBadge);
+        userWeatherBadge = weatherBadge;
 
         userLocationMarker = new google.maps.marker.AdvancedMarkerElement({
             position: pos,
@@ -1026,3 +1048,740 @@ function hideBottomSheet() {
     cachedBusData = null;
     lastUpdateTime = null;
 }
+
+// ============================================================================
+// WEATHER SYSTEM
+// ============================================================================
+
+/**
+ * Weather icon SVG generators
+ */
+const WeatherIcons = {
+    sun: () => {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '40');
+        svg.setAttribute('height', '40');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.innerHTML = `
+            <circle cx="12" cy="12" r="5" fill="#FFD700"/>
+            <g stroke="#FFD700" stroke-width="2" stroke-linecap="round">
+                <line x1="12" y1="1" x2="12" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1" y1="12" x2="3" y2="12"/>
+                <line x1="21" y1="12" x2="23" y2="12"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </g>
+        `;
+        return svg;
+    },
+    
+    cloud: () => {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '40');
+        svg.setAttribute('height', '40');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.innerHTML = `
+            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" 
+                  fill="#B0C4DE" stroke="#778899" stroke-width="1"/>
+        `;
+        return svg;
+    },
+    
+    rain: () => {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '40');
+        svg.setAttribute('height', '40');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.innerHTML = `
+            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" 
+                  fill="#708090" stroke="#4682B4" stroke-width="1"/>
+            <g stroke="#4682B4" stroke-width="2" stroke-linecap="round">
+                <line x1="8" y1="19" x2="8" y2="21"/>
+                <line x1="12" y1="19" x2="12" y2="21"/>
+                <line x1="16" y1="19" x2="16" y2="21"/>
+            </g>
+        `;
+        return svg;
+    },
+    
+    thunderstorm: () => {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '40');
+        svg.setAttribute('height', '40');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.innerHTML = `
+            <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" 
+                  fill="#696969" stroke="#2F4F4F" stroke-width="1"/>
+            <path d="M13 11l-3 5h2l-1 4 4-6h-2z" fill="#FFD700" stroke="#FFA500" stroke-width="0.5"/>
+        `;
+        return svg;
+    }
+};
+
+/**
+ * Get weather icon based on forecast text
+ */
+function getWeatherIcon(forecast) {
+    const forecastLower = forecast.toLowerCase();
+    
+    if (forecastLower.includes('thunder') || forecastLower.includes('heavy')) {
+        return WeatherIcons.thunderstorm();
+    } else if (forecastLower.includes('rain') || forecastLower.includes('shower')) {
+        return WeatherIcons.rain();
+    } else if (forecastLower.includes('cloud') || forecastLower.includes('overcast')) {
+        return WeatherIcons.cloud();
+    } else {
+        return WeatherIcons.sun();
+    }
+}
+
+/**
+ * Find which planning area contains a given coordinate
+ */
+function findPlanningAreaForLocation(latLng) {
+    let containingArea = null;
+    let checkedCount = 0;
+    
+    // Normalize the LatLng to plain object
+    const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
+    const lng = typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng;
+    const normalizedPos = { lat, lng };
+    
+    console.log('   Searching in', lat.toFixed(4), lng.toFixed(4));
+    
+    map.data.forEach(feature => {
+        checkedCount++;
+        const geometry = feature.getGeometry();
+        if (!geometry) return;
+        
+        // Check if point is inside this polygon
+        if (containsLocation(normalizedPos, geometry)) {
+            const areaName = feature.getProperty('PLN_AREA_N');
+            const forecast = feature.getProperty('forecast');
+            containingArea = {
+                name: areaName,
+                forecast: forecast,
+                borderColor: feature.getProperty('borderColor')
+            };
+            console.log(`   ✓ Found: ${areaName} (forecast: ${forecast || 'NONE'})`);
+        }
+    });
+    
+    if (!containingArea) {
+        console.log(`   ✗ Not in any area (checked ${checkedCount} features)`);
+    }
+    
+    return containingArea;
+}
+
+/**
+ * Check if a location is inside a geometry (Polygon or MultiPolygon)
+ */
+function containsLocation(latLng, geometry) {
+    // Ensure latLng is a plain object
+    const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
+    const lng = typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng;
+    const point = { lat, lng };
+    
+    if (geometry.getType() === 'Polygon') {
+        return isPointInPolygon(point, geometry.getAt(0));
+    } else if (geometry.getType() === 'MultiPolygon') {
+        // Check each polygon in the multipolygon
+        for (let i = 0; i < geometry.getLength(); i++) {
+            const polygon = geometry.getAt(i);
+            if (isPointInPolygon(point, polygon.getAt(0))) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Ray casting algorithm to check if point is inside polygon
+ */
+function isPointInPolygon(point, polygon) {
+    const x = point.lng, y = point.lat;
+    let inside = false;
+    
+    for (let i = 0, j = polygon.getLength() - 1; i < polygon.getLength(); j = i++) {
+        const xi = polygon.getAt(i).lng(), yi = polygon.getAt(i).lat();
+        const xj = polygon.getAt(j).lng(), yj = polygon.getAt(j).lat();
+        
+        const intersect = ((yi > y) !== (yj > y))
+            && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    
+    return inside;
+}
+
+/**
+ * Update weather information for user's current location
+ */
+function updateUserLocationWeather(position) {
+    console.log('🌤️ updateUserLocationWeather called');
+    
+    if (!weatherData) {
+        console.log('⚠️ Weather data not loaded yet');
+        return;
+    }
+    
+    const latLng = position || (userLocationMarker ? userLocationMarker.position : null);
+    if (!latLng) {
+        console.log('⚠️ No user location available');
+        return;
+    }
+    
+    // Normalize position to work with both LatLng objects and plain objects
+    const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
+    const lng = typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng;
+    const normalizedPos = { lat, lng };
+    
+    console.log('📍 User position:', lat.toFixed(4), lng.toFixed(4));
+    
+    // Ensure weather badge exists (create it if marker was created before weather system)
+    if (!userWeatherBadge && userLocationMarker && userLocationMarker.content) {
+        console.log('🔨 Creating weather badge retroactively...');
+        const blueDot = userLocationMarker.content;
+        const weatherBadge = document.createElement('div');
+        weatherBadge.className = 'user-weather-badge';
+        blueDot.appendChild(weatherBadge);
+        userWeatherBadge = weatherBadge;
+        console.log('✅ Weather badge created:', userWeatherBadge);
+    }
+    
+    if (!userWeatherBadge) {
+        console.log('❌ Could not create weather badge');
+        console.log('   - userLocationMarker:', userLocationMarker);
+        console.log('   - userLocationMarker.content:', userLocationMarker?.content);
+        return;
+    }
+    
+    // Find which planning area the user is in
+    console.log('🔍 Finding planning area for location...');
+    const area = findPlanningAreaForLocation(normalizedPos);
+    
+    if (area && area.forecast) {
+        // Only update if area changed
+        if (currentUserArea?.name !== area.name) {
+            currentUserArea = area;
+            
+            // Update badge with weather icon
+            userWeatherBadge.innerHTML = '';
+            const icon = getWeatherIcon(area.forecast);
+            icon.setAttribute('width', '24');
+            icon.setAttribute('height', '24');
+            userWeatherBadge.appendChild(icon);
+            
+            // Add tooltip
+            userWeatherBadge.title = `${area.name}: ${area.forecast}`;
+            
+            // Show badge
+            userWeatherBadge.style.opacity = '1';
+            
+            console.log(`✅ User location weather updated: ${area.name} - ${area.forecast}`);
+        }
+    } else {
+        // User not in any mapped area or no forecast available
+        console.log('⚠️ User not in any mapped area or no forecast available');
+        if (currentUserArea !== null) {
+            currentUserArea = null;
+            userWeatherBadge.style.opacity = '0';
+        }
+    }
+}
+
+/**
+ * Get border color based on forecast
+ */
+function getBorderColor(forecast) {
+    const forecastLower = forecast.toLowerCase();
+    
+    if (forecastLower.includes('thunder') || forecastLower.includes('heavy')) {
+        return '#FF4444'; // Red for severe weather
+    } else if (forecastLower.includes('rain') || forecastLower.includes('shower')) {
+        return '#4682B4'; // Blue for rain
+    } else if (forecastLower.includes('cloud') || forecastLower.includes('overcast')) {
+        return '#B0C4DE'; // Light blue for cloudy
+    } else {
+        return '#FFD700'; // Gold for fair weather
+    }
+}
+
+/**
+ * Case-insensitive area name matching
+ */
+function normalizeAreaName(name) {
+    return name.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function matchAreaNames(geoJsonName, neaName) {
+    return normalizeAreaName(geoJsonName) === normalizeAreaName(neaName);
+}
+
+/**
+ * Fetch weather data from NEA API
+ */
+async function fetchWeatherData() {
+    try {
+        const response = await fetch('https://api.data.gov.sg/v1/environment/2-hour-weather-forecast');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Weather data fetched successfully:', data);
+        return data;
+    } catch (error) {
+        console.error('Error fetching weather data:', error);
+        return null;
+    }
+}
+
+/**
+ * Custom Weather Overlay for animations
+ */
+class WeatherOverlay extends google.maps.OverlayView {
+    constructor(bounds, forecast, map) {
+        super();
+        this.bounds = bounds;
+        this.forecast = forecast.toLowerCase();
+        this.div = null;
+        this.setMap(map);
+    }
+    
+    onAdd() {
+        const div = document.createElement('div');
+        div.className = 'weather-overlay';
+        div.style.position = 'absolute';
+        div.style.pointerEvents = 'none';
+        
+        // Add animation based on forecast
+        if (this.forecast.includes('rain') || this.forecast.includes('shower') || this.forecast.includes('thunder')) {
+            // Create rain animation
+            const canvas = document.createElement('canvas');
+            canvas.className = 'rain-canvas';
+            div.appendChild(canvas);
+            this.canvas = canvas;
+            this.animateRain();
+        } else if (this.forecast.includes('cloud')) {
+            // Create cloud animation
+            div.classList.add('cloud-animation');
+        }
+        
+        this.div = div;
+        const panes = this.getPanes();
+        panes.overlayLayer.appendChild(div);
+    }
+    
+    draw() {
+        const overlayProjection = this.getProjection();
+        const sw = overlayProjection.fromLatLngToDivPixel(this.bounds.getSouthWest());
+        const ne = overlayProjection.fromLatLngToDivPixel(this.bounds.getNorthEast());
+        
+        if (this.div) {
+            this.div.style.left = sw.x + 'px';
+            this.div.style.top = ne.y + 'px';
+            this.div.style.width = (ne.x - sw.x) + 'px';
+            this.div.style.height = (sw.y - ne.y) + 'px';
+            
+            // Update canvas size if rain animation
+            if (this.canvas) {
+                this.canvas.width = ne.x - sw.x;
+                this.canvas.height = sw.y - ne.y;
+            }
+        }
+    }
+    
+    animateRain() {
+        if (!this.canvas) return;
+        
+        const ctx = this.canvas.getContext('2d');
+        const raindrops = [];
+        const numDrops = 50;
+        
+        // Initialize raindrops
+        for (let i = 0; i < numDrops; i++) {
+            raindrops.push({
+                x: Math.random() * this.canvas.width,
+                y: Math.random() * this.canvas.height,
+                speed: 2 + Math.random() * 3,
+                length: 10 + Math.random() * 20
+            });
+        }
+        
+        const animate = () => {
+            if (!this.div || !this.getMap()) return; // Stop if overlay removed
+            
+            ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+            ctx.strokeStyle = 'rgba(70, 130, 180, 0.3)';
+            ctx.lineWidth = 1;
+            
+            raindrops.forEach(drop => {
+                ctx.beginPath();
+                ctx.moveTo(drop.x, drop.y);
+                ctx.lineTo(drop.x, drop.y + drop.length);
+                ctx.stroke();
+                
+                drop.y += drop.speed;
+                
+                // Reset raindrop when it goes off screen
+                if (drop.y > this.canvas.height) {
+                    drop.y = -drop.length;
+                    drop.x = Math.random() * this.canvas.width;
+                }
+            });
+            
+            requestAnimationFrame(animate);
+        };
+        
+        animate();
+    }
+    
+    onRemove() {
+        if (this.div) {
+            this.div.parentNode.removeChild(this.div);
+            this.div = null;
+        }
+    }
+    
+    hide() {
+        if (this.div) {
+            this.div.style.visibility = 'hidden';
+        }
+    }
+    
+    show() {
+        if (this.div) {
+            this.div.style.visibility = 'visible';
+        }
+    }
+}
+
+/**
+ * Load and display weather data
+ */
+async function loadWeatherData() {
+    try {
+        // Fetch weather data
+        weatherData = await fetchWeatherData();
+        
+        if (!weatherData || !weatherData.area_metadata || !weatherData.items || !weatherData.items[0]) {
+            console.error('Invalid weather data structure');
+            return;
+        }
+        
+        // Load GeoJSON
+        map.data.loadGeoJson('MasterPlan2019PlanningAreaBoundaryNoSea.geojson', null, (features) => {
+            console.log('GeoJSON loaded, features:', features.length);
+            
+            // Get latest forecast
+            const latestForecast = weatherData.items[0].forecasts;
+            const areaMetadata = weatherData.area_metadata;
+            
+            // Create a map of area names to forecasts
+            const forecastMap = {};
+            latestForecast.forEach(item => {
+                forecastMap[normalizeAreaName(item.area)] = item.forecast;
+            });
+            
+            // Create a map of area names to coordinates
+            const coordsMap = {};
+            areaMetadata.forEach(item => {
+                coordsMap[normalizeAreaName(item.name)] = {
+                    lat: item.label_location.latitude,
+                    lng: item.label_location.longitude
+                };
+            });
+            
+            // Process each feature
+            features.forEach(feature => {
+                const areaName = feature.getProperty('PLN_AREA_N');
+                if (!areaName) return;
+                
+                const normalizedName = normalizeAreaName(areaName);
+                const forecast = forecastMap[normalizedName];
+                
+                if (forecast) {
+                    // Set border style
+                    const borderColor = getBorderColor(forecast);
+                    feature.setProperty('forecast', forecast);
+                    feature.setProperty('borderColor', borderColor);
+                    
+                    // Create weather marker
+                    const coords = coordsMap[normalizedName];
+                    if (coords) {
+                        createWeatherMarker(coords, forecast, areaName);
+                    }
+                }
+            });
+            
+            // Apply styles to borders
+            updateWeatherBorderStyles();
+            
+            // Update weather for user's current location if available
+            console.log('🌤️ Weather data loaded, updating user location...');
+            if (userLocationMarker && userLocationMarker.position) {
+                console.log('📍 User marker exists, updating weather...');
+                setTimeout(() => {
+                    updateUserLocationWeather(userLocationMarker.position);
+                }, 100); // Small delay to ensure GeoJSON is fully processed
+            } else {
+                console.log('⚠️ User marker not available yet');
+            }
+        });
+        
+    } catch (error) {
+        console.error('❌ Error loading weather data:', error);
+    }
+}
+
+/**
+ * Manually trigger weather update for user location
+ * Call this from console if weather badge doesn't appear
+ */
+window.updateMyWeather = function() {
+    console.log('\n===== MANUAL WEATHER UPDATE =====');
+    if (!userLocationMarker) {
+        console.log('❌ No user location marker');
+        return;
+    }
+    if (!weatherData) {
+        console.log('❌ No weather data loaded');
+        return;
+    }
+    console.log('✅ Forcing weather update...');
+    updateUserLocationWeather(userLocationMarker.position);
+    console.log('=================================\n');
+};
+
+/**
+ * Create weather marker
+ */
+function createWeatherMarker(position, forecast, areaName) {
+    const iconElement = document.createElement('div');
+    iconElement.className = 'weather-marker';
+    iconElement.appendChild(getWeatherIcon(forecast));
+    
+    // Add area name label
+    const label = document.createElement('div');
+    label.className = 'weather-label';
+    label.textContent = areaName;
+    iconElement.appendChild(label);
+    
+    const marker = new google.maps.marker.AdvancedMarkerElement({
+        position: position,
+        map: map,
+        content: iconElement,
+        title: `${areaName}: ${forecast}`
+    });
+    
+    marker.forecast = forecast;
+    marker.areaName = areaName;
+    weatherMarkers.push(marker);
+    
+    // Update visibility based on current zoom
+    updateWeatherMarkerVisibility();
+}
+
+/**
+ * Update weather border styles
+ */
+function updateWeatherBorderStyles() {
+    map.data.setStyle((feature) => {
+        const forecast = feature.getProperty('forecast');
+        const borderColor = feature.getProperty('borderColor');
+        
+        if (forecast && currentZoomLevel <= ZOOM_THRESHOLD) {
+            return {
+                strokeColor: borderColor,
+                strokeWeight: 2,
+                fillColor: borderColor,
+                fillOpacity: 0.1,
+                visible: true
+            };
+        } else {
+            return {
+                visible: false
+            };
+        }
+    });
+}
+
+/**
+ * Update weather marker visibility based on zoom
+ */
+function updateWeatherMarkerVisibility() {
+    const isZoomedOut = currentZoomLevel <= ZOOM_THRESHOLD;
+    
+    weatherMarkers.forEach(marker => {
+        if (marker.content) {
+            if (isZoomedOut) {
+                marker.content.style.opacity = '1';
+                marker.content.style.transform = 'scale(1)';
+                marker.content.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            } else {
+                marker.content.style.opacity = '0';
+                marker.content.style.transform = 'scale(0.5)';
+                marker.content.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            }
+        }
+    });
+}
+
+/**
+ * Create weather overlays for zoomed-in view
+ */
+function createWeatherOverlays() {
+    // Clear existing overlays
+    weatherOverlays.forEach(overlay => overlay.setMap(null));
+    weatherOverlays = [];
+    
+    if (currentZoomLevel <= ZOOM_THRESHOLD) return;
+    
+    // Create overlays for visible regions
+    map.data.forEach(feature => {
+        const forecast = feature.getProperty('forecast');
+        if (!forecast) return;
+        
+        const geometry = feature.getGeometry();
+        if (!geometry) return;
+        
+        // Get bounds of the geometry
+        const bounds = new google.maps.LatLngBounds();
+        
+        if (geometry.getType() === 'Polygon') {
+            geometry.getAt(0).forEach(latLng => {
+                bounds.extend(latLng);
+            });
+        } else if (geometry.getType() === 'MultiPolygon') {
+            geometry.forEach(polygon => {
+                polygon.getAt(0).forEach(latLng => {
+                    bounds.extend(latLng);
+                });
+            });
+        }
+        
+        // Create overlay
+        const overlay = new WeatherOverlay(bounds, forecast, map);
+        weatherOverlays.push(overlay);
+    });
+}
+
+/**
+ * Handle zoom changes
+ */
+function handleWeatherZoomChange() {
+    const newZoom = map.getZoom();
+    const previousZoom = currentZoomLevel;
+    currentZoomLevel = newZoom;
+    
+    console.log(`Zoom changed: ${previousZoom} -> ${newZoom}`);
+    
+    // Update marker visibility
+    updateWeatherMarkerVisibility();
+    
+    // Update border styles
+    updateWeatherBorderStyles();
+    
+    // Handle overlays
+    if (newZoom > ZOOM_THRESHOLD && previousZoom <= ZOOM_THRESHOLD) {
+        // Zoomed in - create overlays
+        createWeatherOverlays();
+    } else if (newZoom <= ZOOM_THRESHOLD && previousZoom > ZOOM_THRESHOLD) {
+        // Zoomed out - remove overlays
+        weatherOverlays.forEach(overlay => overlay.setMap(null));
+        weatherOverlays = [];
+    }
+}
+
+/**
+ * Initialize weather system
+ */
+function initWeatherSystem() {
+    console.log('Initializing weather system...');
+    
+    // Load initial weather data
+    loadWeatherData();
+    
+    // Set up zoom listener
+    map.addListener('zoom_changed', handleWeatherZoomChange);
+    
+    // Try to update user location weather after a delay (in case marker exists)
+    setTimeout(() => {
+        console.log('🔄 Attempting delayed user location weather update...');
+        if (userLocationMarker && userLocationMarker.position && weatherData) {
+            updateUserLocationWeather(userLocationMarker.position);
+        }
+    }, 3000); // 3 second delay to ensure everything is loaded
+    
+    // Refresh weather data every 5 minutes
+    weatherRefreshInterval = setInterval(() => {
+        console.log('Refreshing weather data...');
+        
+        // Clear existing markers and overlays
+        weatherMarkers.forEach(marker => marker.map = null);
+        weatherMarkers = [];
+        weatherOverlays.forEach(overlay => overlay.setMap(null));
+        weatherOverlays = [];
+        
+        // Clear GeoJSON layer
+        map.data.forEach(feature => {
+            map.data.remove(feature);
+        });
+        
+        // Reload weather data
+        loadWeatherData();
+    }, 5 * 60 * 1000); // 5 minutes
+}
+
+// ============================================================================
+// END WEATHER SYSTEM
+// ============================================================================
+
+// Debug helper function - accessible from console
+window.debugWeather = function() {
+    console.log('===== WEATHER DEBUG INFO =====');
+    console.log('Weather data loaded:', weatherData !== null);
+    console.log('User location marker:', userLocationMarker !== null);
+    console.log('User weather badge:', userWeatherBadge !== null);
+    console.log('Current user area:', currentUserArea);
+    
+    if (userLocationMarker && userLocationMarker.position) {
+        console.log('User position:', {
+            lat: userLocationMarker.position.lat,
+            lng: userLocationMarker.position.lng
+        });
+        
+        // Try to find the area
+        const area = findPlanningAreaForLocation(userLocationMarker.position);
+        console.log('Found area:', area);
+        
+        // Force update
+        console.log('Forcing weather update...');
+        updateUserLocationWeather(userLocationMarker.position);
+    }
+    
+    let featureCount = 0;
+    let featuresWithForecast = 0;
+    map.data.forEach(feature => {
+        featureCount++;
+        if (feature.getProperty('forecast')) {
+            featuresWithForecast++;
+        }
+    });
+    console.log(`GeoJSON features: ${featureCount}, with forecast: ${featuresWithForecast}`);
+    console.log('============================');
+};
+
+console.log('💡 Tip: Run debugWeather() or updateMyWeather() in console');
+console.log('   debugWeather()    - Full diagnostic info');
+console.log('   updateMyWeather() - Force weather update for your location');
