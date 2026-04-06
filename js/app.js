@@ -924,7 +924,27 @@ function getBusIconSVG(busType) {
 
         `;
     }
-    // Bendy bus (BD) or default - use single deck
+    // Bendy bus (BD) icon
+    else if (busType === 'BD') {
+        return `
+<svg width="38" height="20" viewBox="0 0 38 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="12" y="1" width="6" height="15" fill="#CFCECE"/>
+<path d="M2 0.25H10C11.5188 0.25 12.75 1.48122 12.75 3V14C12.75 15.5188 11.5188 16.75 10 16.75H3C1.48122 16.75 0.25 15.5188 0.25 14V2C0.25 1.0335 1.0335 0.25 2 0.25Z" fill="currentColor" stroke="black" stroke-width="0.5"/>
+<path d="M19 0.25H35C36.5188 0.25 37.75 1.48122 37.75 3V14C37.75 15.5188 36.5188 16.75 35 16.75H20C18.4812 16.75 17.25 15.5188 17.25 14V2C17.25 1.0335 18.0335 0.25 19 0.25Z" fill="currentColor" stroke="black" stroke-width="0.5"/>
+<circle cx="6.5" cy="16.5" r="3.25" fill="white" stroke="black" stroke-width="0.5"/>
+<circle cx="22.5" cy="16.5" r="3.25" fill="white" stroke="black" stroke-width="0.5"/>
+<circle cx="31.5" cy="16.5" r="3.25" fill="white" stroke="black" stroke-width="0.5"/>
+<rect x="2" y="3" width="4" height="3" fill="white"/>
+<rect x="7" y="3" width="4" height="3" fill="white"/>
+<rect x="32" y="3" width="4" height="3" fill="white"/>
+<rect x="26" y="3" width="4" height="3" fill="white"/>
+<rect x="20" y="3" width="4" height="3" fill="white"/>
+<path d="M14.5 1V16" stroke="#545454" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M15.5 1V16" stroke="#545454" stroke-width="0.5" stroke-linecap="round"/>
+</svg>
+        `;
+    }
+    // Default - use single deck
     else {
         return `
 <svg width="23" height="12" viewBox="0 0 23 12" fill="none" xmlns="http://www.w3.org/2000/svg">
