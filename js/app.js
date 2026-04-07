@@ -939,8 +939,9 @@ function getBusIconSVG(busType) {
 <rect x="32" y="3" width="4" height="3" fill="white"/>
 <rect x="26" y="3" width="4" height="3" fill="white"/>
 <rect x="20" y="3" width="4" height="3" fill="white"/>
-<path d="M14.5 1V16" stroke="#545454" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M15.5 1V16" stroke="#545454" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M13.7928 1.25V15.75" stroke="#545454" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M16.1789 1.25V15.75" stroke="#545454" stroke-width="0.5" stroke-linecap="round"/>
+<path d="M15 1.25V15.75" stroke="#545454" stroke-width="0.5" stroke-linecap="round"/>
 </svg>
         `;
     }
