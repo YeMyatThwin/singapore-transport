@@ -879,6 +879,7 @@ function createArrivalCard(bus) {
     const busIcon = document.createElement('div');
     busIcon.className = `bus-icon-placeholder ${statusClass}`;
     busIcon.innerHTML = getBusIconSVG(busType);
+    busIcon.style.transform = 'scaleX(-1)'; // Flips horizontally (right to left)
 
     card.appendChild(timeGroup);
     card.appendChild(busIcon);
