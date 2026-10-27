@@ -87,7 +87,10 @@ function initMap(accessToken) {
         }
     });
 
-    // Update bus stop markers whenever the map is idle (pan/zoom finished)
+    // Update bus stop markers whenever the map moves or goes idle
+    map.on('moveend', () => {
+        if (window._allBusStops) displayNearbyBusStops(window._allBusStops);
+    });
     map.on('idle', () => {
         if (window._allBusStops) displayNearbyBusStops(window._allBusStops);
     });
@@ -96,7 +99,7 @@ function initMap(accessToken) {
     map.on('click', (e) => {
         if (isOpening) return;
         if (bottomSheet && bottomSheet.classList.contains('active')) {
-            if (!e.originalEvent.target.closest('.bus-stop-marker') &&
+            if (!e.originalEvent.target.closest('.bus-stop-marker-wrapper') &&
                 !e.originalEvent.target.closest('.bottom-sheet-content')) {
                 hideBottomSheet();
             }
@@ -289,7 +292,7 @@ function displayNearbyBusStops(allBusStops) {
     const center = map.getCenter();
 
     if (zoom < 14) {
-        busStopMarkers.forEach(({ marker, el }) => fadeOutAndRemoveMarker(marker, el));
+        busStopMarkers.forEach(({ marker, iconEl }) => fadeOutAndRemoveMarker(marker, iconEl));
         busStopMarkers.clear();
         return;
     }
@@ -307,7 +310,7 @@ function displayNearbyBusStops(allBusStops) {
     // Remove out-of-range markers
     busStopMarkers.forEach((entry, code) => {
         if (!visibleCodes.has(code)) {
-            fadeOutAndRemoveMarker(entry.marker, entry.el);
+            fadeOutAndRemoveMarker(entry.marker, entry.iconEl);
             busStopMarkers.delete(code);
         }
     });
@@ -318,7 +321,7 @@ function displayNearbyBusStops(allBusStops) {
         if (existing) {
             if (existing.markerSize !== iconSize) {
                 const isActive = activeBusStopCode === stop.BusStopCode;
-                updateMarkerIcon(existing.el, stop, iconSize, isActive);
+                updateMarkerIcon(existing.iconEl, stop, iconSize, isActive);
                 existing.markerSize = iconSize;
             }
         } else {
@@ -370,62 +373,69 @@ function getActiveBusStopSVG(stop, width) {
 </svg>`;
 }
 
-function fadeOutAndRemoveMarker(marker, el) {
-    if (el && el.classList) {
-        el.classList.remove('spring-in');
-        el.classList.add('fade-out');
+function fadeOutAndRemoveMarker(marker, iconEl) {
+    if (iconEl && iconEl.classList) {
+        iconEl.classList.remove('spring-in');
+        iconEl.classList.add('fade-out');
         setTimeout(() => marker.remove(), 300);
     } else {
         marker.remove();
     }
 }
 
-function updateMarkerIcon(el, stop, size, isActive) {
+function updateMarkerIcon(iconEl, stop, size, isActive) {
     const width = Math.round(size * 220 / 401);
     const svgString = isActive ? getActiveBusStopSVG(stop, width) : getNormalBusStopSVG(stop, width, size);
-    el.innerHTML = svgString;
+    iconEl.innerHTML = svgString;
     // Re-trigger spring animation
-    el.classList.remove('spring-in');
-    void el.offsetWidth; // reflow
-    el.classList.add('spring-in');
+    iconEl.classList.remove('spring-in');
+    void iconEl.offsetWidth; // reflow
+    iconEl.classList.add('spring-in');
 }
 
 function createBusStopMarker(stop, size = 28, isActive = false) {
     const width = Math.round(size * 220 / 401);
     const svgString = isActive ? getActiveBusStopSVG(stop, width) : getNormalBusStopSVG(stop, width, size);
 
-    const el = document.createElement('div');
-    el.className = 'bus-stop-marker';
-    el.innerHTML = svgString;
-    el.title = `${stop.Description || 'Bus Stop'}\n${stop.RoadName || ''}\nStop: ${stop.BusStopCode || ''}`;
+    // Outer wrapper: Mapbox controls its transform: translate(...) for positioning
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bus-stop-marker-wrapper';
 
-    // Spring-in animation
-    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('spring-in')));
+    // Inner element: CSS controls its scale & opacity animations
+    const iconEl = document.createElement('div');
+    iconEl.className = 'bus-stop-marker';
+    iconEl.innerHTML = svgString;
+    wrapper.appendChild(iconEl);
 
-    const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+    wrapper.title = `${stop.Description || 'Bus Stop'}\n${stop.RoadName || ''}\nStop: ${stop.BusStopCode || ''}`;
+
+    // Spring-in animation on inner element
+    requestAnimationFrame(() => requestAnimationFrame(() => iconEl.classList.add('spring-in')));
+
+    const marker = new mapboxgl.Marker({ element: wrapper, anchor: 'bottom' })
         .setLngLat([stop.Longitude, stop.Latitude])
         .addTo(map);
 
-    if (isActive) activeMarkerEl = el;
+    if (isActive) activeMarkerEl = iconEl;
 
-    el.addEventListener('click', (e) => {
+    wrapper.addEventListener('click', (e) => {
         e.stopPropagation();
 
         // Reset previous active marker
-        if (activeMarkerEl && activeMarkerEl !== el) {
-            const prevEntry = [...busStopMarkers.values()].find(v => v.el === activeMarkerEl);
-            if (prevEntry) updateMarkerIcon(activeMarkerEl, prevEntry.stopData, prevEntry.markerSize, false);
+        if (activeMarkerEl && activeMarkerEl !== iconEl) {
+            const prevEntry = [...busStopMarkers.values()].find(v => v.iconEl === activeMarkerEl);
+            if (prevEntry) updateMarkerIcon(prevEntry.iconEl, prevEntry.stopData, prevEntry.markerSize, false);
         }
 
-        activeMarkerEl = el;
+        activeMarkerEl = iconEl;
         activeBusStopCode = stop.BusStopCode;
         const entry = busStopMarkers.get(stop.BusStopCode);
-        if (entry) updateMarkerIcon(el, stop, entry.markerSize, true);
+        if (entry) updateMarkerIcon(iconEl, stop, entry.markerSize, true);
 
         showBottomSheet(stop);
     });
 
-    busStopMarkers.set(stop.BusStopCode, { marker, el, stopData: stop, markerSize: size });
+    busStopMarkers.set(stop.BusStopCode, { marker, wrapper, iconEl, stopData: stop, markerSize: size });
 }
 
 // ─── Bottom sheet ─────────────────────────────────────────────────────────────
@@ -730,7 +740,7 @@ function hideBottomSheet() {
     bottomSheet.style.transform = '';
 
     if (activeMarkerEl) {
-        const entry = [...busStopMarkers.values()].find(v => v.el === activeMarkerEl);
+        const entry = [...busStopMarkers.values()].find(v => v.iconEl === activeMarkerEl);
         if (entry) updateMarkerIcon(activeMarkerEl, entry.stopData, entry.markerSize, false);
         activeMarkerEl = null;
     }
