@@ -103,29 +103,16 @@ app.get('/api/bus-arrival', async (req, res) => {
     }
 });
 
-// Route for index.html with API key injected
-app.get('/', (req, res) => {
-    fs.readFile(path.join(__dirname, 'index.html'), 'utf8', (err, data) => {
+// Route for app.js with Mapbox token injected
+app.get('/js/app.js', (req, res) => {
+    fs.readFile(path.join(__dirname, 'js', 'app.js'), 'utf8', (err, data) => {
         if (err) {
-            res.status(500).send('Error loading page');
+            res.status(500).send('Error loading app.js');
             return;
         }
-        const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-        const html = data.replace('API_KEY_PLACEHOLDER', apiKey);
-        res.send(html);
-    });
-});
-
-// Also handle /index.html
-app.get('/index.html', (req, res) => {
-    fs.readFile(path.join(__dirname, 'index.html'), 'utf8', (err, data) => {
-        if (err) {
-            res.status(500).send('Error loading page');
-            return;
-        }
-        const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-        const html = data.replace('API_KEY_PLACEHOLDER', apiKey);
-        res.send(html);
+        const token = process.env.MAPBOX_ACCESS_TOKEN || '';
+        const js = data.replace('MAPBOX_TOKEN_PLACEHOLDER', token);
+        res.type('application/javascript').send(js);
     });
 });
 
@@ -137,5 +124,8 @@ app.listen(port, () => {
     console.log(`LTA API Keys configured: ${LTA_API_KEYS.length}`);
     if (LTA_API_KEYS.length === 0) {
         console.warn('WARNING: No LTA API keys found in environment variables');
+    }
+    if (!process.env.MAPBOX_ACCESS_TOKEN) {
+        console.warn('WARNING: MAPBOX_ACCESS_TOKEN is not set');
     }
 });

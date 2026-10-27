@@ -8,7 +8,7 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      - MAPBOX_ACCESS_TOKEN=${MAPBOX_ACCESS_TOKEN}
       - LTA_DATAMALL_API_KEY=${LTA_DATAMALL_API_KEY}
       - LTA_DATAMALL_API_KEY_2=${LTA_DATAMALL_API_KEY_2}
     restart: unless-stopped
