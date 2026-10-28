@@ -1,10 +1,6 @@
 // ─── Global state ────────────────────────────────────────────────────────────
 let map;
-let userLocationMarker = null;   // Mapbox Marker object for blue dot
-let userLocationEl = null;       // The DOM element inside the marker
-let accuracyCircleSourceId = 'accuracy-circle-source';
-let watchId;
-let deviceHeading = null;
+let geolocateControl;
 let bottomSheet;
 let currentBusStopCode = null;
 let refreshInterval = null;
@@ -30,61 +26,24 @@ function initMap(accessToken) {
     // Compact attribution
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
 
-    // My Location button (custom)
-    const locationButton = document.createElement('button');
-    locationButton.textContent = 'My Location';
-    locationButton.classList.add('custom-map-control-button');
-    locationButton.addEventListener('click', () => {
-        if (userLocationMarker) {
-            const lngLat = userLocationMarker.getLngLat();
-            map.flyTo({ center: lngLat, zoom: 15 });
-        } else {
-            startLocationTracking();
-        }
-        requestOrientationPermission();
+    // Built-in Mapbox GeolocateControl (blue dot, accuracy circle, direction heading, follow tracking)
+    geolocateControl = new mapboxgl.GeolocateControl({
+        positionOptions: {
+            enableHighAccuracy: true
+        },
+        trackUserLocation: true,
+        showUserHeading: true,
+        showUserLocation: true,
+        showAccuracyCircle: true
     });
-    document.getElementById('map').appendChild(locationButton);
+    map.addControl(geolocateControl, 'top-right');
 
     map.on('load', () => {
-        // Accuracy circle source + layer
-        map.addSource(accuracyCircleSourceId, {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] }
-        });
-        map.addLayer({
-            id: 'accuracy-circle-fill',
-            type: 'fill',
-            source: accuracyCircleSourceId,
-            paint: {
-                'fill-color': '#4285F4',
-                'fill-opacity': 0.1,
-            }
-        });
-        map.addLayer({
-            id: 'accuracy-circle-stroke',
-            type: 'line',
-            source: accuracyCircleSourceId,
-            paint: {
-                'line-color': '#4285F4',
-                'line-opacity': 0.3,
-                'line-width': 1,
-            }
-        });
-
         // Load bus stops
         loadBusStopsFromJSON();
 
-        // Start location / orientation tracking
-        if (typeof DeviceOrientationEvent !== 'undefined' &&
-            typeof DeviceOrientationEvent.requestPermission === 'function') {
-            // iOS: tracking only, compass requested on button click
-            if (navigator.geolocation) startLocationTracking();
-        } else {
-            if (navigator.geolocation) {
-                startOrientationTracking();
-                startLocationTracking();
-            }
-        }
+        // Automatically trigger geolocation tracking
+        geolocateControl.trigger();
     });
 
     // Update bus stop markers whenever the map moves or goes idle
@@ -107,167 +66,6 @@ function initMap(accessToken) {
     });
 
     initBottomSheet();
-}
-
-// ─── Device orientation ──────────────────────────────────────────────────────
-async function requestOrientationPermission() {
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-        try {
-            const permission = await DeviceOrientationEvent.requestPermission();
-            if (permission === 'granted') {
-                startOrientationTracking();
-                return true;
-            } else {
-                alert("Compass permission denied. The direction arrow won't work without it.");
-                return false;
-            }
-        } catch (error) {
-            alert('Error requesting compass permission: ' + error.message);
-            return false;
-        }
-    } else {
-        startOrientationTracking();
-        return true;
-    }
-}
-
-function startOrientationTracking() {
-    if (!window.DeviceOrientationEvent) return;
-    window.addEventListener('deviceorientation', (event) => {
-        if (event.webkitCompassHeading !== undefined) {
-            deviceHeading = event.webkitCompassHeading;
-        } else if (event.alpha !== null) {
-            deviceHeading = event.alpha;
-        }
-        updateDirectionWedge();
-    }, true);
-}
-
-function updateDirectionWedge() {
-    if (userLocationEl && deviceHeading !== null && !isNaN(deviceHeading)) {
-        let wedge = userLocationEl.querySelector('.direction-wedge');
-        if (!wedge) {
-            wedge = document.createElement('div');
-            wedge.className = 'direction-wedge';
-            userLocationEl.appendChild(wedge);
-        }
-        wedge.style.transform = `rotate(${deviceHeading}deg)`;
-    }
-}
-
-// ─── User location tracking ───────────────────────────────────────────────────
-function startLocationTracking() {
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const { latitude: lat, longitude: lng, accuracy } = position.coords;
-            map.flyTo({ center: [lng, lat], zoom: 15 });
-            updateUserLocationMarker(position);
-
-            if (!watchId) {
-                watchId = navigator.geolocation.watchPosition(
-                    updateUserLocationMarker,
-                    (err) => console.error('Location tracking error:', err),
-                    { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 }
-                );
-            }
-        },
-        (error) => {
-            if (error.code !== error.TIMEOUT) {
-                let msg = 'Unable to get your location. ';
-                if (error.code === error.PERMISSION_DENIED) msg += 'Permission denied.';
-                else if (error.code === error.POSITION_UNAVAILABLE) msg += 'Location unavailable.';
-                else msg += 'Unknown error.';
-                alert(msg);
-            }
-        },
-        { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 }
-    );
-}
-
-function updateUserLocationMarker(position) {
-    const { latitude: lat, longitude: lng, accuracy } = position.coords;
-    const heading = deviceHeading !== null ? deviceHeading : position.coords.heading;
-
-    if (!userLocationMarker) {
-        // Create blue-dot element
-        userLocationEl = document.createElement('div');
-        userLocationEl.className = 'blue-dot';
-
-        if (heading !== null && !isNaN(heading)) {
-            const wedge = document.createElement('div');
-            wedge.className = 'direction-wedge';
-            wedge.style.transform = `rotate(${heading}deg)`;
-            userLocationEl.appendChild(wedge);
-        }
-
-        userLocationMarker = new mapboxgl.Marker({ element: userLocationEl, anchor: 'center' })
-            .setLngLat([lng, lat])
-            .addTo(map);
-
-        // Click on blue dot: request orientation or re-centre
-        userLocationEl.addEventListener('click', () => {
-            if (deviceHeading === null) {
-                requestOrientationPermission();
-            } else {
-                map.flyTo({ center: userLocationMarker.getLngLat(), zoom: 15 });
-            }
-        });
-    } else {
-        // Smoothly animate marker to new position
-        animateMarkerTo(userLocationMarker, [lng, lat], accuracy);
-        updateDirectionWedge();
-    }
-
-    // Update accuracy circle
-    updateAccuracyCircle(lat, lng, accuracy);
-}
-
-// Smooth animation for the user location marker
-function animateMarkerTo(marker, targetLngLat, targetAccuracy, duration = 1000) {
-    const startLngLat = marker.getLngLat();
-    const startAccuracy = window._currentAccuracy || targetAccuracy;
-    const startTime = performance.now();
-
-    function animate(now) {
-        const elapsed = now - startTime;
-        const t = Math.min(elapsed / duration, 1);
-        const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
-
-        const lng = startLngLat.lng + (targetLngLat[0] - startLngLat.lng) * ease;
-        const lat = startLngLat.lat + (targetLngLat[1] - startLngLat.lat) * ease;
-        const acc = startAccuracy + (targetAccuracy - startAccuracy) * ease;
-
-        marker.setLngLat([lng, lat]);
-        updateAccuracyCircle(lat, lng, acc);
-
-        if (t < 1) requestAnimationFrame(animate);
-    }
-    window._currentAccuracy = targetAccuracy;
-    requestAnimationFrame(animate);
-}
-
-// Update or draw the accuracy circle using a GeoJSON circle approximation
-function updateAccuracyCircle(lat, lng, radiusMeters) {
-    if (!map || !map.getSource(accuracyCircleSourceId)) return;
-    const circle = createGeoJSONCircle([lng, lat], radiusMeters);
-    map.getSource(accuracyCircleSourceId).setData(circle);
-}
-
-// Create a GeoJSON polygon approximating a circle
-function createGeoJSONCircle(center, radiusMeters, points = 64) {
-    const coords = [];
-    const distanceX = radiusMeters / (111320 * Math.cos(center[1] * Math.PI / 180));
-    const distanceY = radiusMeters / 110540;
-    for (let i = 0; i < points; i++) {
-        const theta = (i / points) * (2 * Math.PI);
-        coords.push([center[0] + distanceX * Math.cos(theta), center[1] + distanceY * Math.sin(theta)]);
-    }
-    coords.push(coords[0]); // close the ring
-    return {
-        type: 'Feature',
-        geometry: { type: 'Polygon', coordinates: [coords] }
-    };
 }
 
 // ─── Bus stop markers ─────────────────────────────────────────────────────────

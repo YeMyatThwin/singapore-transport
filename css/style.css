@@ -20,30 +20,7 @@ html, body {
     left: 0;
 }
 
-/* Custom "My Location" button — positioned top-right, above Mapbox controls */
-.custom-map-control-button {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 10;
-    background-color: #fff;
-    border: 0;
-    border-radius: 4px;
-    box-shadow: 0 1px 4px -1px rgba(0, 0, 0, 0.3);
-    padding: 0 0.75em;
-    font: 400 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    height: 40px;
-    cursor: pointer;
-    white-space: nowrap;
-}
 
-.custom-map-control-button:hover {
-    background-color: #f8f8f8;
-}
-
-.custom-map-control-button:active {
-    background-color: #e8e8e8;
-}
 
 /* Bus stop marker wrapper (Mapbox controls its transform for geolocation) */
 .bus-stop-marker-wrapper {
@@ -110,32 +87,7 @@ html, body {
     }
 }
 
-/* Blue dot for user location */
-.blue-dot {
-    width: 20px;
-    height: 20px;
-    background-color: #4285F4;
-    border: 3px solid white;
-    border-radius: 50%;
-    position: relative;
-    box-shadow: 0 0 10px rgba(66, 133, 244, 0.5);
-}
 
-/* Direction wedge on blue dot */
-.direction-wedge {
-    position: absolute;
-    z-index: -1;
-    width: 70px;
-    height: 70px;
-    bottom: 50%;
-    left: 50%;
-    transform-origin: 50% 100%;
-    margin-left: -35px;
-    margin-bottom: -2px;
-    pointer-events: none;
-    background: linear-gradient(to top, rgba(66, 133, 244, 0.7), rgba(66, 133, 244, 0.05));
-    clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
-}
 
 /* Bottom sheet container */
 .bottom-sheet {
