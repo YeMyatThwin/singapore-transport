@@ -104,8 +104,7 @@ html, body {
     transform: translateY(100%);
     transition: transform 0.3s ease;
     z-index: 1000;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 .bottom-sheet.active {
@@ -130,34 +129,6 @@ html, body {
     }
 }
 
-/* Handle bar */
-.handle-bar {
-    width: 40px;
-    height: 5px;
-    background-color: #D9D9D9;
-    border-radius: 2.5px;
-    margin: 12px auto 0;
-}
-
-.bottom-sheet-handle {
-    width: 40px;
-    height: 5px;
-    background-color: #D9D9D9;
-    border-radius: 2.5px;
-    margin: 12px auto 0;
-    cursor: grab;
-}
-
-@media (min-width: 768px) {
-    .handle-bar {
-        display: none;
-    }
-    
-    .bottom-sheet-handle {
-        display: none;
-    }
-}
-
 /* Bottom sheet content */
 .bottom-sheet-content {
     height: 100%;
@@ -165,14 +136,22 @@ html, body {
     flex-direction: column;
 }
 
-/* Header */
+/* Header (acts as drag handle) */
 .header {
-    padding: 28px 24px 0;
+    padding: 24px 24px 0;
 }
 
 .bottom-sheet-header {
-    padding: 28px 24px 0;
+    padding: 24px 24px 0;
     position: relative;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.bottom-sheet-header:active {
+    cursor: grabbing;
 }
 
 .header-content {

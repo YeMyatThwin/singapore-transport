@@ -322,11 +322,12 @@ function createBusStopMarker(stop, size = 28, isActive = false) {
 // ─── Bottom sheet ─────────────────────────────────────────────────────────────
 function initBottomSheet() {
     bottomSheet = document.getElementById('bottomSheet');
-    const handle = document.querySelector('.bottom-sheet-handle');
+    const header = document.querySelector('.bottom-sheet-header');
     const refreshIcon = document.querySelector('.refresh-icon');
 
     if (refreshIcon) {
-        refreshIcon.addEventListener('click', () => {
+        refreshIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
             if (currentBusStopCode) {
                 refreshIcon.classList.add('rotating');
                 fetchBusArrivalData(currentBusStopCode);
@@ -340,53 +341,111 @@ function initBottomSheet() {
         if (isOpening) return;
         if (bottomSheet.classList.contains('active')) {
             const content = document.querySelector('.bottom-sheet-content');
-            if (content && !content.contains(e.target) && !e.target.closest('.bottom-sheet-handle')) {
+            if (content && !content.contains(e.target)) {
                 hideBottomSheet();
             }
         }
     });
 
-    // Drag-to-close
-    let startY = 0, currentY = 0, isDragging = false;
+    // Drag-to-close via bottom-sheet-header
+    let startY = 0;
+    let currentY = 0;
+    let isDragging = false;
 
-    handle.addEventListener('touchstart', (e) => {
-        startY = e.touches[0].clientY; isDragging = true;
-        bottomSheet.style.transition = 'none';
-    });
-    handle.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
-        currentY = e.touches[0].clientY;
-        const diff = currentY - startY;
-        if (diff > 0) bottomSheet.style.transform = `translateY(${diff}px)`;
-    });
-    handle.addEventListener('touchend', handleDragEnd);
+    if (header) {
+        const onDragStart = (clientY, target) => {
+            // Don't drag if clicking refresh icon or during desktop panel view
+            if (target && target.closest('.refresh-icon')) return false;
+            if (window.innerWidth >= 768) return false;
 
-    handle.addEventListener('mousedown', (e) => {
-        startY = e.clientY; isDragging = true;
-        bottomSheet.style.transition = 'none';
-        handle.style.cursor = 'grabbing';
-    });
-    document.addEventListener('mousemove', (e) => {
-        if (!isDragging) return;
-        currentY = e.clientY;
-        const diff = currentY - startY;
-        if (diff > 0) bottomSheet.style.transform = `translateY(${diff}px)`;
-    });
-    document.addEventListener('mouseup', () => {
-        if (!isDragging) return;
-        handleDragEnd();
-        handle.style.cursor = 'grab';
-    });
+            startY = clientY;
+            currentY = clientY;
+            isDragging = true;
+            bottomSheet.style.transition = 'none';
+            header.style.cursor = 'grabbing';
+            return true;
+        };
 
-    function handleDragEnd() {
-        const diff = currentY - startY;
-        bottomSheet.style.transition = 'transform 0.3s ease-out';
-        if (diff > window.innerHeight * 0.3) {
-            hideBottomSheet();
-        } else {
-            bottomSheet.style.transform = 'translateY(0)';
-        }
-        isDragging = false; startY = 0; currentY = 0;
+        const onDragMove = (clientY) => {
+            if (!isDragging) return;
+            currentY = clientY;
+            const diff = currentY - startY;
+            if (diff > 0) {
+                bottomSheet.style.transform = `translateY(${diff}px)`;
+            } else {
+                bottomSheet.style.transform = 'translateY(0)';
+            }
+        };
+
+        const onDragEnd = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            header.style.cursor = 'grab';
+
+            const diff = currentY - startY;
+            const rect = bottomSheet.getBoundingClientRect();
+
+            // Threshold: dragged down > 25% of viewport height OR bottom sheet top reached bottom 25-30% of screen
+            const threshold = window.innerHeight * 0.25;
+            const reachedBottom = rect.top > (window.innerHeight * 0.75);
+
+            if (diff > threshold || reachedBottom) {
+                // Animate smoothly to bottom and close
+                bottomSheet.style.transition = 'transform 0.25s ease-out';
+                bottomSheet.style.transform = 'translateY(100%)';
+                setTimeout(() => {
+                    hideBottomSheet();
+                }, 250);
+            } else {
+                // Snap back to open position
+                bottomSheet.style.transition = 'transform 0.25s ease-out';
+                bottomSheet.style.transform = 'translateY(0)';
+            }
+
+            startY = 0;
+            currentY = 0;
+        };
+
+        // Touch event listeners
+        header.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                onDragStart(e.touches[0].clientY, e.target);
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            if (isDragging && e.touches.length === 1) {
+                onDragMove(e.touches[0].clientY);
+                if (e.cancelable) e.preventDefault();
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            if (isDragging) onDragEnd();
+        });
+
+        window.addEventListener('touchcancel', () => {
+            if (isDragging) onDragEnd();
+        });
+
+        // Mouse event listeners
+        header.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                onDragStart(e.clientY, e.target);
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                onDragMove(e.clientY);
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDragging) {
+                onDragEnd();
+            }
+        });
     }
 }
 
