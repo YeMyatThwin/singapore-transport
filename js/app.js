@@ -96,6 +96,10 @@ function initMap(accessToken, startCenter = DEFAULT_CENTER, autoLocate = false) 
     });
     map.addControl(geolocateControl, 'top-right');
 
+    // Bus stop search control (positioned directly under the current location button)
+    const searchControl = new BusStopSearchControl();
+    map.addControl(searchControl, 'top-right');
+
     // If location permission is denied or fails, fallback to the default location
     geolocateControl.on('error', (err) => {
         console.warn('Geolocation error or permission denied:', err);
@@ -149,6 +153,7 @@ function initMap(accessToken, startCenter = DEFAULT_CENTER, autoLocate = false) 
     });
 
     initBottomSheet();
+    initSearchUI();
 }
 
 // ─── Bus stop markers ─────────────────────────────────────────────────────────
@@ -714,6 +719,254 @@ function hideBottomSheet() {
     currentBusStopCode = null;
     cachedBusData = null;
     lastUpdateTime = null;
+}
+
+// ─── Bus Stop Search ──────────────────────────────────────────────────────────
+class BusStopSearchControl {
+    onAdd(map) {
+        this._map = map;
+        this._container = document.createElement('div');
+        this._container.className = 'mapboxgl-ctrl mapboxgl-ctrl-group';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mapboxgl-ctrl-search';
+        btn.title = 'Search Bus Stops';
+        btn.setAttribute('aria-label', 'Search Bus Stops');
+        btn.innerHTML = `
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+        `;
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openSearchModal();
+        });
+
+        this._container.appendChild(btn);
+        return this._container;
+    }
+
+    onRemove() {
+        if (this._container && this._container.parentNode) {
+            this._container.parentNode.removeChild(this._container);
+        }
+        this._map = undefined;
+    }
+}
+
+let currentFilteredStops = [];
+let highlightedSearchIndex = -1;
+
+function initSearchUI() {
+    const modal = document.getElementById('searchModal');
+    const backdrop = document.getElementById('searchModalBackdrop');
+    const input = document.getElementById('busStopSearchInput');
+    const clearBtn = document.getElementById('searchClearBtn');
+    const closeBtn = document.getElementById('searchCloseBtn');
+
+    if (!modal || !input) return;
+
+    if (backdrop) backdrop.addEventListener('click', closeSearchModal);
+    if (closeBtn) closeBtn.addEventListener('click', closeSearchModal);
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            clearBtn.style.display = 'none';
+            renderSearchResults('');
+            input.focus();
+        });
+    }
+
+    input.addEventListener('input', () => {
+        const query = input.value.trim();
+        if (clearBtn) clearBtn.style.display = query.length > 0 ? 'flex' : 'none';
+        renderSearchResults(query);
+    });
+
+    // Keyboard navigation: Escape, ArrowUp, ArrowDown, Enter
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeSearchModal();
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            navigateSearchResults(1);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            navigateSearchResults(-1);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (highlightedSearchIndex >= 0 && highlightedSearchIndex < currentFilteredStops.length) {
+                selectBusStop(currentFilteredStops[highlightedSearchIndex]);
+            } else if (currentFilteredStops.length > 0) {
+                selectBusStop(currentFilteredStops[0]);
+            }
+        }
+    });
+}
+
+function openSearchModal() {
+    const modal = document.getElementById('searchModal');
+    const input = document.getElementById('busStopSearchInput');
+    if (!modal) return;
+
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    if (input) {
+        input.value = '';
+        const clearBtn = document.getElementById('searchClearBtn');
+        if (clearBtn) clearBtn.style.display = 'none';
+        renderSearchResults('');
+        setTimeout(() => input.focus(), 60);
+    }
+}
+
+function closeSearchModal() {
+    const modal = document.getElementById('searchModal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+function renderSearchResults(query) {
+    const list = document.getElementById('searchResultsList');
+    if (!list) return;
+
+    if (!query) {
+        currentFilteredStops = [];
+        highlightedSearchIndex = -1;
+        list.innerHTML = `<div class="search-empty-state">Type a road name, bus stop code (e.g. 01012), or description to search.</div>`;
+        return;
+    }
+
+    const q = query.toLowerCase();
+    const allStops = window._allBusStops || [];
+
+    // Filter matching bus stops (code, description, road name)
+    const matches = allStops.filter(stop => {
+        const code = (stop.BusStopCode || '').toLowerCase();
+        const desc = (stop.Description || '').toLowerCase();
+        const road = (stop.RoadName || '').toLowerCase();
+        return code.includes(q) || desc.includes(q) || road.includes(q);
+    }).slice(0, 30); // show top 30 matches
+
+    currentFilteredStops = matches;
+    highlightedSearchIndex = -1;
+
+    if (matches.length === 0) {
+        list.innerHTML = `<div class="search-empty-state">No bus stops found matching "<strong>${escapeHtml(query)}</strong>".</div>`;
+        return;
+    }
+
+    list.innerHTML = matches.map((stop, idx) => `
+        <div class="search-item" data-index="${idx}">
+            <div class="search-item-icon">
+                <img src="img/Singapore_Bus_logo.svg" alt="Bus Stop" width="22" height="25" />
+            </div>
+            <div class="search-item-info">
+                <div class="search-item-title">${highlightMatch(stop.Description || 'Bus Stop', q)}</div>
+                <div class="search-item-subtitle">
+                    <span class="search-item-badge">${highlightMatch(stop.BusStopCode, q)}</span>
+                    <span>${highlightMatch(stop.RoadName || '', q)}</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    // Attach click events to result items
+    list.querySelectorAll('.search-item').forEach((itemEl) => {
+        itemEl.addEventListener('click', () => {
+            const idx = parseInt(itemEl.dataset.index, 10);
+            if (matches[idx]) {
+                selectBusStop(matches[idx]);
+            }
+        });
+    });
+}
+
+function navigateSearchResults(direction) {
+    const list = document.getElementById('searchResultsList');
+    if (!list || currentFilteredStops.length === 0) return;
+
+    const items = list.querySelectorAll('.search-item');
+    if (items.length === 0) return;
+
+    highlightedSearchIndex += direction;
+    if (highlightedSearchIndex < 0) highlightedSearchIndex = 0;
+    if (highlightedSearchIndex >= items.length) highlightedSearchIndex = items.length - 1;
+
+    items.forEach((el, idx) => {
+        if (idx === highlightedSearchIndex) {
+            el.classList.add('highlighted');
+            el.scrollIntoView({ block: 'nearest' });
+        } else {
+            el.classList.remove('highlighted');
+        }
+    });
+}
+
+function selectBusStop(stop) {
+    closeSearchModal();
+
+    // Reset previous active marker
+    if (activeMarkerEl) {
+        const prevEntry = [...busStopMarkers.values()].find(v => v.iconEl === activeMarkerEl);
+        if (prevEntry) updateMarkerIcon(prevEntry.iconEl, prevEntry.stopData, prevEntry.markerSize, false);
+        activeMarkerEl = null;
+    }
+
+    activeBusStopCode = stop.BusStopCode;
+
+    // Zoom level 16 ensures icon size is 50px
+    const targetZoom = Math.max(map.getZoom(), 16);
+
+    const isMobile = window.innerWidth < 768;
+    const padding = isMobile
+        ? { top: 0, bottom: bottomSheet.offsetHeight || Math.round(window.innerHeight * 0.6), left: 0, right: 0 }
+        : { top: 0, bottom: 0, left: bottomSheet.offsetWidth || 375, right: 0 };
+
+    map.flyTo({
+        center: [stop.Longitude, stop.Latitude],
+        zoom: targetZoom,
+        padding: padding,
+        duration: 600,
+        essential: true
+    });
+
+    // Make sure nearby stops around new location are loaded
+    if (window._allBusStops) {
+        displayNearbyBusStops(window._allBusStops);
+    }
+
+    // Set or create active marker
+    const entry = busStopMarkers.get(stop.BusStopCode);
+    if (entry) {
+        updateMarkerIcon(entry.iconEl, stop, entry.markerSize, true);
+        activeMarkerEl = entry.iconEl;
+    } else {
+        createBusStopMarker(stop, 50, true);
+    }
+
+    showBottomSheet(stop);
+}
+
+function highlightMatch(text, query) {
+    if (!text) return '';
+    if (!query) return escapeHtml(text);
+    const escapedText = escapeHtml(text);
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return escapedText.replace(regex, '<mark>$1</mark>');
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 // ─── Entry point (token injected by server) ───────────────────────────────────
