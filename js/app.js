@@ -1,4 +1,7 @@
-// ─── Global state ────────────────────────────────────────────────────────────
+// ─── Global constants & state ────────────────────────────────────────────────
+const DEFAULT_CENTER = [103.8198, 1.3521];   // Singapore [lng, lat]
+const DEFAULT_ZOOM = 15;
+
 let map;
 let geolocateControl;
 let bottomSheet;
@@ -11,15 +14,67 @@ let isOpening = false;
 let activeMarkerEl = null;       // DOM element of the active bus stop marker
 let activeBusStopCode = null;
 
+// Determine initial center and request permission on startup if not yet determined
+async function getInitialLocation() {
+    if (!navigator.geolocation) {
+        return { coords: DEFAULT_CENTER, autoLocate: false };
+    }
+
+    // Fast path: if permission is already explicitly denied, do not prompt or wait
+    if (navigator.permissions && navigator.permissions.query) {
+        try {
+            const status = await navigator.permissions.query({ name: 'geolocation' });
+            if (status.state === 'denied') {
+                return { coords: DEFAULT_CENTER, autoLocate: false };
+            }
+        } catch (e) {
+            // Continue to getCurrentPosition if permissions API fails
+        }
+    }
+
+    // Request location from browser (prompts if state is 'prompt', or returns immediately if 'granted')
+    return new Promise((resolve) => {
+        let resolved = false;
+        const timer = setTimeout(() => {
+            if (!resolved) {
+                resolved = true;
+                resolve({ coords: DEFAULT_CENTER, autoLocate: false });
+            }
+        }, 8000);
+
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timer);
+                    resolve({
+                        coords: [pos.coords.longitude, pos.coords.latitude],
+                        autoLocate: true
+                    });
+                }
+            },
+            (err) => {
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timer);
+                    console.warn('Geolocation denied or failed on startup:', err);
+                    resolve({ coords: DEFAULT_CENTER, autoLocate: false });
+                }
+            },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+        );
+    });
+}
+
 // ─── Map initialisation ──────────────────────────────────────────────────────
-function initMap(accessToken) {
+function initMap(accessToken, startCenter = DEFAULT_CENTER, autoLocate = false) {
     mapboxgl.accessToken = accessToken;
 
     map = new mapboxgl.Map({
         container: 'map',
         style: 'mapbox://styles/mapbox/streets-v12',
-        center: [103.8198, 1.3521],   // Singapore [lng, lat]
-        zoom: 15,
+        center: startCenter,
+        zoom: DEFAULT_ZOOM,
         attributionControl: false,    // we'll add a compact one
     });
 
@@ -34,16 +89,44 @@ function initMap(accessToken) {
         trackUserLocation: true,
         showUserHeading: true,
         showUserLocation: true,
-        showAccuracyCircle: true
+        showAccuracyCircle: true,
+        fitBoundsOptions: {
+            maxZoom: DEFAULT_ZOOM
+        }
     });
     map.addControl(geolocateControl, 'top-right');
 
+    // If location permission is denied or fails, fallback to the default location
+    geolocateControl.on('error', (err) => {
+        console.warn('Geolocation error or permission denied:', err);
+        map.flyTo({
+            center: DEFAULT_CENTER,
+            zoom: DEFAULT_ZOOM,
+            essential: true
+        });
+    });
+
     map.on('load', () => {
-        // Load bus stops
+        // Load bus stops around current start center
         loadBusStopsFromJSON();
 
-        // Automatically trigger geolocation tracking
-        geolocateControl.trigger();
+        // If permission was already granted, activate tracking (no transition jump)
+        if (autoLocate) {
+            geolocateControl.trigger();
+        }
+
+        // Listen for runtime permission changes
+        if (navigator.permissions && navigator.permissions.query) {
+            navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+                status.onchange = () => {
+                    if (status.state === 'granted') {
+                        geolocateControl.trigger();
+                    } else if (status.state === 'denied') {
+                        map.flyTo({ center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM, essential: true });
+                    }
+                };
+            }).catch(() => {});
+        }
     });
 
     // Update bus stop markers whenever the map moves or goes idle
@@ -553,4 +636,9 @@ function hideBottomSheet() {
 }
 
 // ─── Entry point (token injected by server) ───────────────────────────────────
-initMap('MAPBOX_TOKEN_PLACEHOLDER');
+async function initApp(accessToken) {
+    const { coords, autoLocate } = await getInitialLocation();
+    initMap(accessToken, coords, autoLocate);
+}
+
+initApp('MAPBOX_TOKEN_PLACEHOLDER');
