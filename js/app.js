@@ -457,6 +457,20 @@ async function showBottomSheet(stop) {
     bottomSheet.classList.add('active');
     setTimeout(() => { isOpening = false; }, 300);
 
+    // Center the map view on the clicked bus stop in the remaining visible area (above bottom sheet)
+    if (map) {
+        const isMobile = window.innerWidth < 768;
+        const padding = isMobile
+            ? { top: 0, bottom: bottomSheet.offsetHeight || Math.round(window.innerHeight * 0.6), left: 0, right: 0 }
+            : { top: 0, bottom: 0, left: bottomSheet.offsetWidth || 375, right: 0 };
+
+        map.easeTo({
+            center: [stop.Longitude, stop.Latitude],
+            padding: padding,
+            duration: 400
+        });
+    }
+
     await fetchBusArrivalData(stop.BusStopCode);
 
     if (refreshInterval) clearInterval(refreshInterval);
@@ -678,6 +692,14 @@ function getLoadText(load) {
 function hideBottomSheet() {
     bottomSheet.classList.remove('active');
     bottomSheet.style.transform = '';
+
+    // Reset camera padding so visible viewport returns to full screen
+    if (map) {
+        map.easeTo({
+            padding: { top: 0, bottom: 0, left: 0, right: 0 },
+            duration: 300
+        });
+    }
 
     if (activeMarkerEl) {
         const entry = [...busStopMarkers.values()].find(v => v.iconEl === activeMarkerEl);
