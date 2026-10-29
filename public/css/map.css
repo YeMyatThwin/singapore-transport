@@ -71,3 +71,17 @@
         opacity: 0;
     }
 }
+
+/* User location marker (blue dot) interactions */
+.mapboxgl-user-location,
+.mapboxgl-user-location-dot,
+.mapboxgl-user-location-heading {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+}
+
+.mapboxgl-user-location-dot:active {
+    transform: scale(0.9);
+    transition: transform 0.1s ease;
+}
+

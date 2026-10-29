@@ -1,5 +1,5 @@
 import { fetchAppConfig } from './config.js';
-import { DEFAULT_CENTER, DEFAULT_ZOOM, getInitialLocation } from './utils/geo.js';
+import { DEFAULT_CENTER, DEFAULT_ZOOM, getInitialLocation, requestOrientationAndReload } from './utils/geo.js';
 import { MarkerManager } from './components/markers.js';
 import { BottomSheet } from './components/bottomSheet.js';
 import { BusStopSearchControl, SearchModal } from './components/search.js';
@@ -86,7 +86,13 @@ class App {
         this.map.on('load', async () => {
             await this.loadBusStops();
 
-            if (autoLocate) {
+            const pendingAutoGeolocate = sessionStorage.getItem('auto_geolocate') === 'true';
+            if (pendingAutoGeolocate) {
+                sessionStorage.removeItem('auto_geolocate');
+            }
+
+            // Automatically trigger geolocation if previously allowed or flagged for reload
+            if (autoLocate || pendingAutoGeolocate) {
                 this.geolocateControl.trigger();
             }
 
@@ -113,9 +119,12 @@ class App {
             if (this.allBusStops.length) this.markerManager.displayNearbyStops(this.allBusStops);
         });
 
-        // Close bottom sheet when clicking anywhere on the map except markers/sheet
+        // Close bottom sheet when clicking anywhere on the map except markers/sheet/blue dot
         this.map.on('click', (e) => {
             if (this.bottomSheet.isOpening) return;
+            if (e.originalEvent?.target?.closest('.mapboxgl-user-location-dot, .mapboxgl-user-location, .mapboxgl-user-location-heading')) {
+                return;
+            }
             if (this.bottomSheet.isActive()) {
                 if (!e.originalEvent.target.closest('.bus-stop-marker-wrapper') &&
                     !e.originalEvent.target.closest('.bottom-sheet-content')) {
@@ -123,6 +132,60 @@ class App {
                 }
             }
         });
+
+        this.initUserLocationInteractions();
+    }
+
+    initUserLocationInteractions() {
+        let isHandlingTouch = false;
+
+        const checkAndHandle = (e) => {
+            // Check direct click on user location elements
+            const dot = e.target?.closest('.mapboxgl-user-location-dot, .mapboxgl-user-location, .mapboxgl-user-location-heading');
+            if (dot) {
+                e.stopPropagation();
+                e.preventDefault();
+                requestOrientationAndReload();
+                return;
+            }
+
+            // Also check proximity tap (within 25px of user location) for mobile touch friendliness
+            if (this.geolocateControl && this.geolocateControl._lastKnownPosition && this.map) {
+                const coords = this.geolocateControl._lastKnownPosition.coords;
+                if (coords) {
+                    const point = this.map.project([coords.longitude, coords.latitude]);
+                    const rect = this.map.getContainer().getBoundingClientRect();
+                    const clientX = e.clientX ?? (e.changedTouches && e.changedTouches[0]?.clientX);
+                    const clientY = e.clientY ?? (e.changedTouches && e.changedTouches[0]?.clientY);
+
+                    if (clientX !== undefined && clientY !== undefined) {
+                        const clickX = clientX - rect.left;
+                        const clickY = clientY - rect.top;
+                        const dist = Math.hypot(clickX - point.x, clickY - point.y);
+
+                        if (dist <= 25) {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            requestOrientationAndReload();
+                        }
+                    }
+                }
+            }
+        };
+
+        const mapEl = document.getElementById('map');
+        if (mapEl) {
+            mapEl.addEventListener('touchend', (e) => {
+                isHandlingTouch = true;
+                checkAndHandle(e);
+                setTimeout(() => { isHandlingTouch = false; }, 300);
+            }, { passive: false });
+
+            mapEl.addEventListener('click', (e) => {
+                if (isHandlingTouch) return;
+                checkAndHandle(e);
+            });
+        }
     }
 
     async loadBusStops() {
