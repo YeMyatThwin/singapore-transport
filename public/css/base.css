@@ -1,0 +1,20 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    width: 100%;
+    font-family: var(--font-family);
+    overflow: hidden;
+}
+
+@media (min-width: 768px) {
+    body {
+        background-color: #f0f0f0;
+        align-items: stretch;
+    }
+}

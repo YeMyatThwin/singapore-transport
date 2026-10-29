@@ -1,162 +1,150 @@
-# Real-Time Location Tracker with Google Maps
+# BusSin - Real-Time Singapore Bus Tracker
 
-A mobile-first web application for real-time location tracking with compass direction indicator and dark mode map.
+A mobile-first web application for real-time Singapore bus tracking, arrival predictions, and interactive bus stop discovery built with **Mapbox GL JS** and **LTA DataMall API**.
+
+![BusSin Logo](public/assets/img/bussin_logo.png)
 
 ## Features
 
-- 🗺️ **Dark Mode Map** - Clean, minimal Google Maps with dark theme
-- 📍 **Real-time Location Tracking** - Continuous 24/7 GPS tracking
-- 🧭 **Compass Direction** - Flashlight-style beam showing direction you're facing
-- 📱 **Mobile Optimized** - Fullscreen responsive design for mobile and desktop
-- 🚏 **Custom Markers** - Bus stop markers with custom SVG icons
-- 🎯 **Auto-center** - Automatically centers on your location on load
-- 🔒 **Permission Handling** - Smart iOS and Android permission management
+- 🗺️ **Interactive Vector Map** - Smooth Mapbox GL JS integration with user geolocation and follow tracking.
+- 🚏 **Bus Stop Discovery** - Dynamic nearby bus stop rendering with smooth spring-in animations and adaptive marker scaling based on zoom level.
+- 🔍 **Instant Search** - Debounced modal search supporting road names, descriptions, and 5-digit bus stop codes.
+- ⏱️ **Live Arrival Timings** - Accurate countdowns for incoming buses, auto-refreshing every 30 seconds with 1-second countdown tickers.
+- 🚌 **Bus Capacity & Deck Type** - Real-time seat availability tags (*Seats Available*, *Standing Available*, *Crowded*) and vector icons for Single Deck, Double Deck, and Bendy buses.
+- 📱 **Mobile Gesture Bottom Sheet** - Touch & mouse drag-to-dismiss bottom sheet drawer with responsive desktop sidebar view.
+- 🔄 **LTA API Key Failover** - Automatic multi-key fallback rotation in the backend proxy when an LTA account key is rate-limited (429) or unauthorized (401/403).
 
-## Setup
-
-1. **Get Google Maps API Key**:
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create/select a project
-   - Enable **Maps JavaScript API**
-   - Create an API Key
-   - Add API restrictions (HTTP referrers) for security
-
-2. **Create Map ID** (required for Advanced Markers):
-   - Go to [Maps Management](https://console.cloud.google.com/google/maps-apis/studio/maps)
-   - Create Map ID (e.g., "Location Tracker")
-   - Select "JavaScript" type
-   - Copy the Map ID
-
-3. **Configure the project**:
-   ```bash
-   # Replace API_KEY_PLACEHOLDER in index.html with your API key
-   # Replace DEMO_MAP_ID in js/app.js with your Map ID
-   ```
-
-4. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-5. **Run the server**:
-   ```bash
-   npm start
-   ```
-   - Opens at `http://localhost:3000`
-   - Uses nodemon for auto-restart during development
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the root directory with the following variables:
-
-```env
-# Google Maps API Key
-GOOGLE_MAPS_API_KEY=your_google_maps_api_key
-
-# LTA DataMall API Keys (for Singapore bus data)
-# Primary key
-LTA_DATAMALL_API_KEY=your_primary_lta_key
-
-# Backup keys (optional, for redundancy)
-LTA_DATAMALL_API_KEY_2=your_backup_lta_key_1
-LTA_DATAMALL_API_KEY_3=your_backup_lta_key_2
-```
-
-### Multiple LTA API Keys
-
-The application supports **multiple LTA DataMall API keys** for redundancy:
-
-- **Primary Key**: Uses `LTA_DATAMALL_API_KEY`
-- **Backup Keys**: Can add unlimited backup keys using `LTA_DATAMALL_API_KEY_2`, `LTA_DATAMALL_API_KEY_3`, etc.
-- **Auto-fallback**: If the current key fails with HTTP 401 (unauthorized) or 429 (rate limited), the app automatically switches to the next available key
-- **Use Case**: Prevents service interruption if a key is banned, revoked, reaches daily limits, or experiences issues
-
-The server logs which key failed and which one it's switching to:
-```
-LTA API key #1 failed (401), retrying with next key
-```
-
-#### Setup for Docker
-
-If using Docker, update `docker-compose.yml` to include all backup keys:
-
-```yaml
-environment:
-  - LTA_DATAMALL_API_KEY=${LTA_DATAMALL_API_KEY}
-  - LTA_DATAMALL_API_KEY_2=${LTA_DATAMALL_API_KEY_2}
-  - LTA_DATAMALL_API_KEY_3=${LTA_DATAMALL_API_KEY_3}
-```
-
-## Usage
-
-### For Testing
-- Open `https://localhost:3000` (HTTPS required for geolocation)
-- Allow location and compass permissions when prompted
-- Map centers on your location with blue dot
-- Direction arrow shows where you're facing
-
-### For Production
-- Set up proper API key restrictions (HTTP referrers)
-- Use environment variables for API key (not exposed in frontend)
-- Deploy with HTTPS (required for geolocation API)
-
-## Technologies
-
-- Google Maps JavaScript API
-- Advanced Marker Element for custom markers
-- Geolocation API (GPS tracking)
-- Device Orientation API (compass)
-- Express.js (web server)
-- Nodemon (development)
-
-## Browser Compatibility
-
-- ✅ **iOS Safari** - Requires user interaction for compass
-- ✅ **Android Chrome** - Full support
-- ⚠️ **Desktop** - Location works, compass may not (no sensors)
-- ⚠️ **HTTP** - Geolocation requires HTTPS in production
-
-## Security Note
-
-⚠️ **API Key Exposure**: The current build exposes the API key in the frontend. For production:
-- Use API key restrictions (HTTP referrers whitelist)
-- Consider using a backend proxy to hide the key
-- Monitor usage in Google Cloud Console
-- Set up usage quotas to prevent abuse
+---
 
 ## Project Structure
 
+```text
+.
+├── server/                         # Backend Express application
+│   ├── app.js                      # Express configuration & safe static routes
+│   ├── config.js                   # Environment & API key loader
+│   ├── routes/
+│   │   ├── arrival.js              # GET /api/bus-arrival proxy endpoint
+│   │   └── config.js               # GET /api/config (safe Mapbox token delivery)
+│   └── services/
+│       └── ltaService.js           # LTA DataMall client with key rotation fallback
+│
+├── public/                         # Clean, isolated client-side assets
+│   ├── index.html                  # Semantic, minimal HTML (no inline SVGs)
+│   ├── assets/
+│   │   ├── icons/                  # Extracted SVG icons & SVG sprite sheet
+│   │   │   ├── bus-sd.svg          # Single-deck bus icon
+│   │   │   ├── bus-dd.svg          # Double-deck bus icon
+│   │   │   ├── bus-bd.svg          # Bendy bus icon
+│   │   │   ├── marker-normal.svg   # Bus stop pole marker
+│   │   │   ├── marker-active.svg   # Selected bus stop pin
+│   │   │   ├── search.svg          # Magnifying glass icon
+│   │   │   ├── clear.svg           # Clear input icon
+│   │   │   ├── refresh.svg         # Animated refresh icon
+│   │   │   └── sprite.svg          # Master SVG sprite sheet (<symbol>)
+│   │   └── img/
+│   │       ├── favicon.png         # Lightweight 32x32 favicon
+│   │       ├── bussin_logo.png     # Optimized app logo
+│   │       └── Singapore_Bus_logo.svg
+│   ├── css/                        # Modular stylesheet system
+│   │   ├── variables.css           # Design tokens, colors & typography
+│   │   ├── base.css                # Reset and core page styles
+│   │   ├── map.css                 # Mapbox container & marker animations
+│   │   ├── bottom-sheet.css        # Arrival cards, drawer gestures & icons
+│   │   ├── search.css              # Modal overlay, input & autocomplete list
+│   │   └── style.css               # Unified style aggregator
+│   └── js/                         # Native ES Modules (no bundler required)
+│       ├── app.js                  # Main app coordinator
+│       ├── config.js               # Runtime configuration fetcher
+│       ├── components/
+│       │   ├── bottomSheet.js      # Drawer gestures, timers & arrival cards
+│       │   ├── icons.js            # Sprite reference helpers
+│       │   ├── markers.js          # Mapbox bus stop marker lifecycle
+│       │   └── search.js           # Search modal, debounce & arrow navigation
+│       ├── services/
+│       │   └── busArrival.js       # Client API client
+│       └── utils/
+│           ├── formatters.js       # Time, html escaping & debounce utils
+│           └── geo.js              # Geolocation & Haversine distance calculations
+│
+├── saved-data/                     # Offline bus stop dataset
+│   └── bus_stops_singapore.json    # Full Singapore bus stops catalog (~5,000 stops)
+│
+├── docs/                           # Deployment & DevOps documentation
+│   ├── deployment-guide.md         # Google Cloud VM setup
+│   ├── nginx-proxy-setup.md        # Nginx reverse proxy configuration
+│   └── docker-clean-restart.md     # Docker maintenance steps
+│
+├── server.js                       # Root server entry point
+├── Dockerfile                      # Production container image definition
+├── docker-compose.yml              # Multi-container orchestration
+└── package.json
 ```
-├── index.html          # Main HTML file
-├── css/
-│   └── style.css      # Styles (dark mode, markers, UI)
-├── js/
-│   └── app.js         # Map logic, tracking, permissions
-├── server.js          # Express server
-├── package.json       # Dependencies
-└── README.md          # Documentation
+
+---
+
+## Setup & Running Locally
+
+### 1. Prerequisites
+- **Node.js**: v18.0.0 or higher
+- **Mapbox Access Token**: Free token from [Mapbox Console](https://account.mapbox.com/)
+- **LTA DataMall API Key**: Free key from [LTA DataMall](https://datamall.lta.gov.sg/)
+
+### 2. Configure Environment Variables
+Create a `.env` file in the root directory:
+
+```env
+# Mapbox token for map tiles and geolocation
+MAPBOX_ACCESS_TOKEN=your_mapbox_public_token
+
+# Primary LTA DataMall Key
+LTA_DATAMALL_API_KEY=your_primary_lta_account_key
+
+# Optional: Backup keys for automatic failover
+LTA_DATAMALL_API_KEY_2=your_backup_lta_key_2
+LTA_DATAMALL_API_KEY_3=your_backup_lta_key_3
+
+PORT=3000
 ```
 
-## Troubleshooting
+### 3. Install Dependencies
+```bash
+npm install
+```
 
-### Location not working
-- Ensure HTTPS is enabled
-- Check browser location permissions
-- Verify device Location Services are on
+### 4. Start Server
+For development (auto-reload with nodemon):
+```bash
+npm run dev
+```
 
-### Compass not showing
-- iOS: Click "My Location" button to trigger permission
-- Android: Move device to activate magnetometer
-- Desktop: Compass not available (no sensors)
+For production:
+```bash
+npm start
+```
+Access the application at `http://localhost:3000`.
 
-### Map not loading
-- Check API key is valid
-- Verify Maps JavaScript API is enabled
-- Check browser console for errors
-- Ensure billing is set up in Google Cloud
+---
 
-## License
+## Docker Deployment
 
-MIT
+To build and run the production container:
+
+```bash
+docker compose up -d --build
+```
+
+View server logs:
+```bash
+docker compose logs -f
+```
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/config` | Returns safe client configuration (`{ mapboxToken }`) |
+| `GET` | `/api/bus-arrival?busStopCode=:code` | Proxies request to LTA DataMall `/v3/BusArrival` with key failover |
+| `GET` | `/data/bus_stops_singapore.json` | Serves the cached Singapore bus stops dataset |

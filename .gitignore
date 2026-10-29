@@ -19,6 +19,7 @@ pnpm-debug.log*
 
 # OS files
 .DS_Store
+**/.DS_Store
 Thumbs.db
 
 # IDE
@@ -33,6 +34,4 @@ build/
 .cache/
 .parcel-cache/
 
-# Local text guide duplicates
-guides txt file/
 

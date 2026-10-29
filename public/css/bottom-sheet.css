@@ -1,0 +1,325 @@
+/* Bottom sheet container */
+.bottom-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 60vh;
+    min-height: 450px;
+    background-color: var(--color-bg);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.bottom-sheet.active {
+    transform: translateY(0);
+}
+
+@media (min-width: 768px) {
+    .bottom-sheet {
+        width: 375px;
+        max-width: 40vw;
+        height: 100vh;
+        min-height: 100vh;
+        border-radius: 0;
+        box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+        left: 0;
+        right: auto;
+        transform: translateX(-100%);
+    }
+    
+    .bottom-sheet.active {
+        transform: translateX(0);
+    }
+}
+
+/* Bottom sheet content */
+.bottom-sheet-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header (acts as drag handle) */
+.bottom-sheet-header {
+    padding: 24px 24px 0;
+    position: relative;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.bottom-sheet-header:active {
+    cursor: grabbing;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.header-left {
+    flex: 1;
+}
+
+.bus-stop-name,
+#busStopTitle {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text-main);
+    line-height: 24px;
+    margin: 0;
+    letter-spacing: 0;
+}
+
+#busStopTitle .road-name,
+.road-name {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    line-height: 17px;
+    margin: 5px 0 0;
+    letter-spacing: 0;
+    display: block;
+}
+
+.header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.refresh-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    align-self: flex-end;
+    color: var(--color-accent-blue);
+}
+
+.refresh-icon:active {
+    transform: scale(0.95);
+}
+
+.refresh-icon.rotating svg {
+    animation: rotate 0.6s ease-in-out;
+}
+
+@keyframes rotate {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(-360deg);
+    }
+}
+
+.last-updated {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 8px;
+    line-height: 10px;
+    color: var(--color-text-muted);
+    gap: 2px;
+}
+
+.update-label {
+    font-weight: 400;
+}
+
+.update-time {
+    font-weight: 400;
+    font-size: 10px;
+}
+
+/* Divider */
+.divider {
+    width: 100%;
+    height: 1px;
+    background-color: var(--color-divider);
+    margin-top: 16px;
+}
+
+/* Bottom sheet body */
+.bottom-sheet-body {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 20px;
+}
+
+/* Service row */
+.service-row {
+    display: flex;
+    padding: 10px 0;
+    padding-left: 24px;
+    margin: 0;
+    border-bottom: 1px solid transparent;
+    overflow: hidden;
+    position: relative;
+}
+
+.service-row::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 80px;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.8) 50%, rgba(255, 255, 255, 1));
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Service number */
+.service-number {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 76px;
+    padding-top: 20px;
+}
+
+.service-number .number {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--color-text-main);
+    line-height: 29px;
+    letter-spacing: 0;
+}
+
+.service-number .operator {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--color-text-subtle);
+    line-height: 12px;
+    margin-top: 4px;
+    letter-spacing: 0;
+}
+
+/* Arrival cards container */
+.arrival-cards {
+    display: flex;
+    gap: 8px;
+    flex-wrap: nowrap;
+    flex: 1;
+    padding-top: 18px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-right: 68px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.arrival-cards::-webkit-scrollbar {
+    display: none;
+}
+
+/* Arrival card */
+.arrival-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px 8px 12px;
+    background-color: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    min-width: 100px;
+    height: 49px;
+    gap: 8px;
+}
+
+/* Arrival time group */
+.arrival-time-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.arrival-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: #333340;
+    line-height: 17px;
+    letter-spacing: 0;
+}
+
+/* Status tags */
+.status-tag {
+    font-size: 7.25px;
+    font-weight: 700;
+    line-height: 9px;
+    text-align: left;
+    letter-spacing: 0;
+    margin-top: 0;
+}
+
+.status-standing {
+    color: var(--status-standing);
+}
+
+.status-crowded {
+    color: var(--status-crowded);
+}
+
+/* Bus icon placeholder */
+.bus-icon-placeholder {
+    width: 22px;
+    height: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.bus-icon-placeholder svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Bus icon status colors */
+.bus-icon-placeholder.status-ok {
+    color: var(--status-ok);
+}
+
+.bus-icon-placeholder.status-standing {
+    color: var(--status-standing);
+}
+
+.bus-icon-placeholder.status-crowded {
+    color: var(--status-crowded);
+}
+
+.bus-icon-placeholder.status-default {
+    color: white;
+}
+
+/* Scrollbar styling */
+.bottom-sheet::-webkit-scrollbar {
+    width: 0px;
+}
+
+.bottom-sheet::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.bottom-sheet::-webkit-scrollbar-thumb {
+    background: #D9D9D9;
+    border-radius: 10px;
+}
+
+@media (max-width: 767px) {
+    .bottom-sheet {
+        border-radius: 20px 20px 0 0;
+    }
+}

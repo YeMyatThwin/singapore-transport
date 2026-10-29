@@ -1,0 +1,27 @@
+:root {
+    --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    
+    /* Primary brand colors */
+    --color-primary: #007F95;
+    --color-primary-dark: #004B50;
+    --color-primary-light: #E6F3F5;
+    --color-primary-soft: #D7F2F6;
+    --color-accent-blue: #7BA7FF;
+
+    /* Status colors */
+    --status-ok: #1AB24D;
+    --status-standing: #FFA600;
+    --status-crowded: #E54040;
+    --status-load-seats: #4CAF50;
+    --status-load-standing: #FF9800;
+    --status-load-limited: #F44336;
+
+    /* Neutrals */
+    --color-bg: #FFFFFF;
+    --color-bg-secondary: #F5F5F7;
+    --color-border: #E5E5EB;
+    --color-divider: #E6E6E6;
+    --color-text-main: #000000;
+    --color-text-muted: #808080;
+    --color-text-subtle: #999999;
+}

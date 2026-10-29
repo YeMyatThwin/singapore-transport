@@ -1,10 +1,11 @@
 {
-  "name": "google-map-sdk-test",
+  "name": "bussin",
   "version": "1.0.0",
-  "description": "A simple web project to test Google Maps SDK",
+  "description": "BusSin - Singapore Real-time Bus Tracker & Arrival Times with Mapbox GL JS",
   "main": "server.js",
   "scripts": {
-    "start": "nodemon server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "axios": "^1.13.4",

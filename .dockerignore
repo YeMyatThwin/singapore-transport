@@ -4,6 +4,8 @@ npm-debug.log
 .gitignore
 .env
 .DS_Store
+**/.DS_Store
 *.md
+docs
 Dockerfile
 .dockerignore
