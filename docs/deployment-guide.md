@@ -45,8 +45,10 @@ nano .env
 
 Paste your keys:
 ```
-GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+MAPBOX_ACCESS_TOKEN=your_mapbox_access_token_here
 LTA_DATAMALL_API_KEY=your_lta_datamall_api_key_here
+# Optional backup keys
+# LTA_DATAMALL_API_KEY_2=your_backup_key_here
 PORT=3000
 ```
 

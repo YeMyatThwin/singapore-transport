@@ -68,7 +68,8 @@ A mobile-first web application for real-time Singapore bus tracking, arrival pre
 │           └── geo.js              # Geolocation & Haversine distance calculations
 │
 ├── saved-data/                     # Offline bus stop dataset
-│   └── bus_stops_singapore.json    # Full Singapore bus stops catalog (~5,000 stops)
+│   ├── bus_stops_singapore.json    # Full Singapore bus stops catalog (~5,000 stops)
+│   └── fetch_bus_stops.js          # Script to update/fetch bus stops from LTA DataMall
 │
 ├── docs/                           # Deployment & DevOps documentation
 │   ├── deployment-guide.md         # Google Cloud VM setup
@@ -123,6 +124,15 @@ For production:
 npm start
 ```
 Access the application at `http://localhost:3000`.
+
+### 5. Updating Bus Stops Data
+Whenever LTA updates routes or adds new bus stops, refresh the offline catalog by running:
+```bash
+npm run update:bus-stops
+# OR
+node saved-data/fetch_bus_stops.js
+```
+This automatically queries the LTA DataMall API in 500-record batches and updates `saved-data/bus_stops_singapore.json` (while saving a `.bak` backup of the previous version).
 
 ---
 
